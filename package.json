@@ -8,7 +8,8 @@
     "watch": "tsc -w -p ./",
     "test": "jest",
     "test:watch": "jest --watch",
-    "pretest": "npm run compile"
+    "pretest": "npm run compile",
+    "package": "vsce package"
   },
   "license": "MIT",
   "devDependencies": {
@@ -16,7 +17,8 @@
     "@babel/preset-env": "^8.0.5",
     "@babel/preset-typescript": "^8.0.1",
     "@types/node": "^26.6.1",
-    "@types/vscode": "^1.138.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^4.0.0",
     "babel-jest": "^30.5.1",
     "jest": "^30.5.1",
     "jest-environment-jsdom": "^30.5.1",
@@ -47,5 +49,9 @@
         "title": "Salesforce ER Modeller: Select Org"
       }
     ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vikascohen/SalesforceERModellerVSCODEExtension.git"
   }
 }

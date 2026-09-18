@@ -111,10 +111,36 @@ npm run compile   # or: npm run watch
 npm test          # Jest — erDiagramLogic (30) + schemaService (14) + paletteFilter (10)
 ```
 
-To run the extension inside VS Code: open this folder in VS Code, press
-F5 to launch an Extension Development Host, run `sf org login web` in
-its terminal if you haven't already, then run
-`Salesforce ER Modeller: Open` from the command palette.
+To run the extension inside VS Code for development/testing: open this
+folder in VS Code, press F5 to launch an Extension Development Host, run
+`sf org login web` in its terminal if you haven't already, then run
+`Salesforce ER Modeller: Open` from the command palette. Each F5 press
+opens a temporary, separate VS Code window running the extension — it
+doesn't install anything permanently and disappears when you close that
+window.
+
+## Installing it as a real extension
+
+F5 is for development. To have it show up as an ordinary, permanently
+installed extension in your actual VS Code — like anything from the
+Marketplace — package it into a `.vsix` file and install that:
+
+```bash
+npm install -g @vscode/vsce   # one-time, packages extensions into .vsix files
+npm install
+npm run compile
+vsce package                  # produces sf-er-modeller-0.1.0.vsix in this folder
+```
+
+Then either run `code --install-extension sf-er-modeller-0.1.0.vsix`,
+or in VS Code itself open the Extensions view, click the `...` menu in
+its top corner, and choose "Install from VSIX...". It'll then appear in
+your Extensions list like any other installed extension, persist across
+restarts, and its commands show up in the command palette without
+needing to press F5 first.
+
+This isn't published to the VS Code Marketplace — installing the
+`.vsix` directly is the only distribution method right now.
 
 ## License
 
