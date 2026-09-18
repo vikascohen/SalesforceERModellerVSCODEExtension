@@ -12,7 +12,17 @@
 </head>
 <body>
     <div class="toolbar">
-        <button id="importBtn" title="Describe an object via the Salesforce CLI and add it to the canvas">Import from Org</button>
+        <button id="openBtn" title="Open a saved .erd diagram">Open</button>
+        <button id="saveBtn" title="Save (Ctrl/Cmd+S)">Save</button>
+        <button id="saveAsBtn" title="Save As...">Save As</button>
+        <span class="sep"></span>
+        <input id="importNames" type="text" placeholder="Account, Contact, Order__c" title="Object API names, comma-separated">
+        <button id="importBtn" title="Describe these objects via the Salesforce CLI and add them to the canvas">Import from Org</button>
+        <span class="sep"></span>
+        <button id="exportMermaidBtn" title="Copy Mermaid erDiagram syntax to the clipboard">Copy Mermaid</button>
+        <button id="exportDrawioBtn" title="Export as a draw.io / diagrams.net file">Export draw.io</button>
+        <span class="sep"></span>
+        <label class="toggle"><input type="checkbox" id="focusToggle"> Focus mode</label>
         <span class="status" id="statusText"></span>
     </div>
     <div class="main">

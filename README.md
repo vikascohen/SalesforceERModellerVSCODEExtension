@@ -7,64 +7,105 @@ standalone extension for working with Salesforce data models directly in
 VS Code, with no dependency on it or on the target org having anything
 installed.
 
-**Status: early scaffold, not yet feature-complete.** This is being built
-incrementally, the same way the original LWC app was — a working core
-first, verified at each step, before layering in the rest of the feature
-set. Below is an honest account of what's real right now versus what's
-still a placeholder or not yet started.
+**Status: a real, working core, not yet the full feature set.** Built
+incrementally, verified at each step, the same way the original LWC app
+was. Below is an honest account of what's genuinely working versus
+what's still missing — not everything from the original app is here yet.
 
-## What works right now
+## Requirements
 
-- The DSL parser, geometry engine, and Mermaid/draw.io export logic
+- The [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli)
+  (`sf`), installed and with at least one org authenticated
+  (`sf org login web`). This extension does not manage authentication
+  itself — it shells out to whatever `sf` command you'd run yourself in
+  a terminal, the same way the existing Salesforce Org Visualizer
+  extension already does, rather than introducing a second auth
+  mechanism.
+
+## What works right now, genuinely verified
+
+- **The DSL parser, geometry engine, and Mermaid/draw.io export logic**
   (`src/erDiagramLogic.js`) is a direct, unmodified port from the
-  original project — same file, same tests, all 30 passing here. It has
-  zero VS Code or Salesforce dependencies of its own, which is what
-  makes it portable at all.
-- The extension activates, registers a command
-  (`Salesforce ER Modeller: Open`), and opens a webview panel.
-- Typing DSL text in the editor pane renders live SVG boxes and
-  connectors on a canvas, using the ported parser and geometry engine —
-  this is a real, working render loop, not a mock.
+  original project. Same file, same 30 tests, all passing here.
+- **Org connection**: a status bar item shows the current default org
+  (or prompts to select one); `Salesforce ER Modeller: Select Org` lists
+  every authenticated org via `sf org list` and switches the CLI's
+  target org.
+- **Import from Org**: type object API names, click Import, and the
+  extension calls `sf sobject describe --json` for each one, classifies
+  every field (Master-Detail vs. Lookup vs. Polymorphic Lookup, Roll-Up
+  Summary vs. genuine Formula, required, friendly type label), and
+  appends the resulting DSL to the editor — a direct TypeScript port of
+  `SchemaMetadataController.cls`'s classification logic
+  (`src/schemaService.ts`), backed by 14 new unit tests covering the
+  same cases the original Apex logic was verified against (including
+  the additive `cascadeDelete` signal for Master-Detail detection, and
+  the `calculated`-must-gate-first fix for Roll-Up Summary — a real bug
+  this port's own tests caught before it shipped, not a hypothetical).
+- **Full canvas styling**: primary keys marked with a gold `*`,
+  relationship fields with a purple `~`, Roll-Up Summary fields with a
+  teal `Σ` — the same visual language as the original app, not a new
+  one. Relationship lines use the same stroke colors, dash patterns, and
+  arrow/diamond markers as the original (solid purple diamond for
+  Master-Detail, dashed red open diamond for Polymorphic, solid blue
+  arrow for Lookup), including cardinality labels at each end. Custom
+  vs. standard object header coloring comes directly from the ported
+  geometry engine's own `headerFill` output.
+- **Focus mode**: click an entity (with the toggle on) to dim everything
+  not directly related to it.
+- **Save / Save As / Open**: diagrams persist as local `.erd` files via
+  standard VS Code save/open dialogs, not Salesforce records — the
+  natural fit for a dev tool, version-controllable in Git. Ctrl/Cmd+S
+  saves; the panel title shows a dirty-state dot.
+- **Export**: Copy Mermaid syntax to the clipboard, or export a
+  `.drawio` file — both reuse the same ported, tested export functions
+  the original app uses.
 
-## What's stubbed or not yet built
+## What's not built yet
 
-- **Import from Org** — the button exists and posts a message to the
-  extension host, but nothing on the extension-host side listens for it
-  yet. No Salesforce CLI integration exists at all yet.
-- **Visual styling** — the canvas currently draws plain, unstyled boxes
-  using VS Code's theme colors. None of the original app's PK/FK
-  markers, relationship arrow styles, Roll-Up Summary badges, or themes
-  are ported yet.
-- **Persistence** — nothing is saved anywhere yet. The eventual plan is
-  local DSL files in the workspace rather than Salesforce records, since
-  that fits a dev-tool distributed via VS Code rather than one running
-  inside an org, but this hasn't been built.
-- Sharing View, Heatmap, Data Dictionary, hover card, Master-Detail/
-  Roll-Up Summary detection, drag-and-drop from a palette, multi-file
-  tabs — none of this exists yet. All of it needs a working Salesforce
-  connection first (see Import from Org above), which is the next real
-  piece of work.
+- **Data Dictionary, Sharing View, Heatmap** — all need Tooling API or
+  aggregate SOQL queries via `sf data query`. Not started.
+- **Object palette / drag-and-drop** — `listAllObjectNames()` exists in
+  `sfCli.ts` but isn't wired into any UI yet; there's no palette to drag
+  from.
+- **DSL autocomplete, the object summary hover card, the smart
+  relationship linter, schema drift comparison** — none of these exist
+  yet.
+- **Multi-file tabs** — each `Salesforce ER Modeller: Open` opens a
+  single panel; there's no tab strip for working on several diagrams at
+  once yet.
+- **Themes** — the canvas currently just uses VS Code's own theme colors
+  automatically (a side effect of using `var(--vscode-*)` throughout,
+  not a deliberate theming feature); none of the original's four named
+  themes are implemented as a choice.
+
+## A genuine limitation of this whole port, stated plainly
+
+Everything above has been verified by compiling cleanly (`tsc`),
+running the Jest suite, and reviewing the code directly — **nothing has
+been interactively launched inside real VS Code**, since the environment
+this was built in has no VS Code binary at all. The `sf` CLI shape
+assumptions in `sfCli.ts` and `schemaService.ts` are based on
+Salesforce's long-stable, publicly documented REST Describe API (which
+`sf sobject describe` wraps directly) — not guessed at, but also not run
+against a live, authenticated org from here, since none is available in
+this environment either. Treat "compiles and passes its tests" as
+exactly that, not as "confirmed working end to end" until someone
+actually presses F5, connects a real org, and reports back what
+happens.
 
 ## Development
 
 ```bash
 npm install
 npm run compile   # or: npm run watch
-npm test          # Jest — currently just erDiagramLogic.test.js
+npm test          # Jest — erDiagramLogic.test.js (30) + schemaService.test.ts (14)
 ```
 
-To actually run the extension inside VS Code (not yet verified from this
-environment — see note below): open this folder in VS Code, press F5 to
-launch an Extension Development Host, then run
+To run the extension inside VS Code: open this folder in VS Code, press
+F5 to launch an Extension Development Host, run `sf org login web` in
+its terminal if you haven't already, then run
 `Salesforce ER Modeller: Open` from the command palette.
-
-**A genuine limitation worth stating plainly:** everything above marked
-as working has been verified by compiling cleanly (`tsc`) and by running
-the Jest suite. None of it has been interactively launched inside actual
-VS Code yet — that needs a real desktop VS Code session, which the
-environment this was built in doesn't have. Treat the webview/extension
-wiring as "should work, compiles cleanly, not yet visually confirmed"
-until someone actually presses F5 and reports back.
 
 ## License
 

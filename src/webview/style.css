@@ -33,6 +33,30 @@ html, body {
     color: var(--vscode-descriptionForeground);
 }
 
+.sep {
+    width: 1px;
+    height: 20px;
+    background: var(--vscode-panel-border);
+    margin: 0 2px;
+}
+
+#importNames {
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, transparent);
+    padding: 3px 6px;
+    border-radius: 2px;
+    width: 220px;
+}
+
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+}
+
 .main {
     display: flex;
     height: calc(100vh - 40px);
