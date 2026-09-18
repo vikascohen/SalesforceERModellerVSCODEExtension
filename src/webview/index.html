@@ -16,7 +16,10 @@
         <button id="saveBtn" title="Save (Ctrl/Cmd+S)">Save</button>
         <button id="saveAsBtn" title="Save As...">Save As</button>
         <span class="sep"></span>
-        <input id="importNames" type="text" placeholder="Account, Contact, Order__c" title="Object API names, comma-separated">
+        <div class="autocomplete-wrap">
+            <input id="importNames" type="text" placeholder="Account, Contact, Order__c" title="Object API names, comma-separated">
+            <div id="suggestDropdown" class="suggest-dropdown" hidden></div>
+        </div>
         <button id="importBtn" title="Describe these objects via the Salesforce CLI and add them to the canvas">Import from Org</button>
         <span class="sep"></span>
         <button id="exportMermaidBtn" title="Copy Mermaid erDiagram syntax to the clipboard">Copy Mermaid</button>

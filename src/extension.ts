@@ -128,7 +128,16 @@ class ErModellerPanel {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'src', 'webview')]
+                // Scoped to the whole src/ folder, not just src/webview/ --
+                // erDiagramLogic.js lives one level up from the webview
+                // assets (kept there deliberately, matching where it lives
+                // in the original repo, so it stays easy to diff against
+                // upstream). A webview can only ever load resources from
+                // inside localResourceRoots, so scoping this to just
+                // src/webview/ would have silently blocked that file from
+                // ever loading at all -- caught this while wiring up a
+                // second cross-folder import, not from a runtime failure.
+                localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'src')]
             }
         );
 

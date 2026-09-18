@@ -3,6 +3,8 @@
 // (acquireVsCodeApi()) for anything needing real filesystem or
 // Salesforce CLI access, neither of which a webview can do itself.
 
+import { currentSearchTerm, filterObjectNames, appendNameToInput } from './paletteFilter.js';
+
 const vscode = acquireVsCodeApi();
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -11,6 +13,7 @@ const canvas = document.getElementById('canvas');
 const statusText = document.getElementById('statusText');
 const importBtn = document.getElementById('importBtn');
 const importNames = document.getElementById('importNames');
+const suggestDropdown = document.getElementById('suggestDropdown');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -23,6 +26,7 @@ let renderTimer = null;
 let lastModel = null;
 let dirty = false;
 let focusedEntity = null;
+let allObjectNames = [];
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -58,6 +62,16 @@ async function init() {
     editor.addEventListener('input', () => { markDirty(); scheduleRender(); });
     importBtn.addEventListener('click', doImport);
     importNames.addEventListener('keydown', (e) => { if (e.key === 'Enter') doImport(); });
+    importNames.addEventListener('input', renderSuggestions);
+    importNames.addEventListener('focus', () => {
+        if (allObjectNames.length === 0) vscode.postMessage({ type: 'requestObjectList' });
+        renderSuggestions();
+    });
+    document.addEventListener('click', (e) => {
+        if (e.target !== importNames && !suggestDropdown.contains(e.target)) {
+            suggestDropdown.hidden = true;
+        }
+    });
     openBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestOpen' }));
     saveBtn.addEventListener('click', doSave);
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
@@ -87,6 +101,28 @@ function markDirty() {
 
 function doSave() {
     vscode.postMessage({ type: 'requestSave', text: editor.value });
+}
+
+function renderSuggestions() {
+    const term = currentSearchTerm(importNames.value);
+    const matches = filterObjectNames(allObjectNames, term);
+    if (matches.length === 0) {
+        suggestDropdown.hidden = true;
+        return;
+    }
+    suggestDropdown.innerHTML = '';
+    matches.forEach((name) => {
+        const item = document.createElement('div');
+        item.className = 'suggest-item';
+        item.textContent = name;
+        item.addEventListener('click', () => {
+            importNames.value = appendNameToInput(importNames.value, name);
+            suggestDropdown.hidden = true;
+            importNames.focus();
+        });
+        suggestDropdown.appendChild(item);
+    });
+    suggestDropdown.hidden = false;
 }
 
 function doImport() {
@@ -271,6 +307,9 @@ function handleExtensionMessage(event) {
         setStatus('Saved.');
     } else if (msg.type === 'orgChanged') {
         setStatus(msg.org ? `Connected: ${msg.org.alias || msg.org.username}` : 'No org selected.');
+    } else if (msg.type === 'objectList') {
+        allObjectNames = msg.names || [];
+        renderSuggestions();
     }
 }
 

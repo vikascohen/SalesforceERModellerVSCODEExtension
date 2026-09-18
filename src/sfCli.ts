@@ -167,16 +167,19 @@ export async function describeObject(apiName: string): Promise<SfCliDescribe> {
 }
 
 export async function listAllObjectNames(): Promise<string[]> {
-    // `sf sobject list` returns plain object API names, one per line, when
-    // not using --json (its --json form wraps the same list). Using the
-    // plain form here and splitting on newlines, since it is the simpler,
-    // more stable shape for a bare name list.
-    const { stdout } = await execAsync('sf sobject list --json', { maxBuffer: 1024 * 1024 * 5 });
+    // `sf sobject list --sobject all --json`. Genuinely unverified against
+    // a live org from this environment -- handling both plausible result
+    // shapes (a plain array of name strings, or an array of objects with
+    // a `name` property) rather than committing to one guess, since
+    // getting this wrong would silently return an empty palette instead
+    // of a clear error.
+    const { stdout } = await execAsync('sf sobject list --sobject all --json', { maxBuffer: 1024 * 1024 * 5 });
     const parsed = JSON.parse(stdout);
     if (parsed.status !== 0) {
         throw new SfCliError(parsed.message || 'Could not list objects.');
     }
-    const names: string[] = Array.isArray(parsed.result) ? parsed.result : [];
+    const raw: any[] = Array.isArray(parsed.result) ? parsed.result : [];
+    const names = raw.map((entry) => (typeof entry === 'string' ? entry : entry && entry.name)).filter(Boolean);
     return names.sort();
 }
 

@@ -57,6 +57,33 @@ html, body {
     color: var(--vscode-descriptionForeground);
 }
 
+.autocomplete-wrap {
+    position: relative;
+}
+
+.suggest-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 10;
+    background: var(--vscode-dropdown-background);
+    border: 1px solid var(--vscode-dropdown-border);
+    max-height: 220px;
+    overflow-y: auto;
+    min-width: 220px;
+}
+
+.suggest-item {
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--vscode-dropdown-foreground);
+}
+
+.suggest-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
 .main {
     display: flex;
     height: calc(100vh - 40px);

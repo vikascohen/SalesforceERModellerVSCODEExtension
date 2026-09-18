@@ -61,13 +61,22 @@ what's still missing — not everything from the original app is here yet.
   `.drawio` file — both reuse the same ported, tested export functions
   the original app uses.
 
+- **Object autocomplete for Import from Org**: typing in the import
+  field fetches the org's full object list (`sf sobject list --sobject
+  all --json`) and filters it live, matching anywhere in the name, not
+  just the start — click a suggestion to add it to the list. The
+  filtering logic itself is pure and unit tested (10 tests) separately
+  from the DOM wiring, since the DOM interaction isn't something this
+  environment can verify without real VS Code, but the matching logic
+  underneath it is.
+
 ## What's not built yet
 
 - **Data Dictionary, Sharing View, Heatmap** — all need Tooling API or
   aggregate SOQL queries via `sf data query`. Not started.
-- **Object palette / drag-and-drop** — `listAllObjectNames()` exists in
-  `sfCli.ts` but isn't wired into any UI yet; there's no palette to drag
-  from.
+- **Drag-and-drop from a visual palette** — the object list now feeds a
+  text-based autocomplete (above), but there's no separate visual
+  palette panel to drag entities from directly onto the canvas yet.
 - **DSL autocomplete, the object summary hover card, the smart
   relationship linter, schema drift comparison** — none of these exist
   yet.
@@ -99,7 +108,7 @@ happens.
 ```bash
 npm install
 npm run compile   # or: npm run watch
-npm test          # Jest — erDiagramLogic.test.js (30) + schemaService.test.ts (14)
+npm test          # Jest — erDiagramLogic (30) + schemaService (14) + paletteFilter (10)
 ```
 
 To run the extension inside VS Code: open this folder in VS Code, press
