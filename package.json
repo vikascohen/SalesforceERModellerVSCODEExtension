@@ -1,0 +1,42 @@
+{
+  "name": "sf-er-modeller",
+  "version": "0.1.0",
+  "description": "Build, view, and export Entity-Relationship diagrams of a Salesforce org's data model, directly in VS Code.",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "pretest": "npm run compile"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^8.0.5",
+    "@babel/preset-env": "^8.0.5",
+    "@types/node": "^26.6.1",
+    "@types/vscode": "^1.138.0",
+    "babel-jest": "^30.5.1",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
+    "typescript": "^7.0.2"
+  },
+  "displayName": "Salesforce ER Modeller",
+  "publisher": "vikascohen",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "sfErModeller.open",
+        "title": "Salesforce ER Modeller: Open"
+      }
+    ]
+  }
+}
