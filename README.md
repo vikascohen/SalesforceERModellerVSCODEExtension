@@ -180,12 +180,21 @@ what's still missing — not everything from the original app is here yet.
   closing panel is actually the one being tracked, and separately
   tracking every open panel in its own list for anything (like an org
   switch) that needs to reach all of them, not just the most recent one.
+- **Object palette (drag-and-drop)**: a new toggleable sidebar lists
+  every object, searchable, and dragging one onto the canvas adds it —
+  reuses the exact same `importFromOrg` message Import from Org already
+  sends, rather than a separate code path, since describing one dropped
+  object and describing a typed-in list of objects need identical
+  handling. One deliberate simplification from the original, not a
+  missing feature: the LWC also tracks a manual x/y drop position per
+  entity, overriding the geometry engine's automatic layout for that one
+  entity specifically — this port has no manual position tracking
+  anywhere else either (nothing here overrides the auto layout, ever),
+  so a drop just adds the entity and lets the geometry engine place it,
+  consistent with how every other entity on this canvas is positioned.
 
 ## What's not built yet
 
-- **Drag-and-drop from a visual palette** — the object list now feeds a
-  text-based autocomplete (above), but there's no separate visual
-  palette panel to drag entities from directly onto the canvas yet.
 - **Themes** — the canvas currently just uses VS Code's own theme colors
   automatically (a side effect of using `var(--vscode-*)` throughout,
   not a deliberate theming feature); none of the original's four named

@@ -41,6 +41,10 @@ const driftModal = document.getElementById('driftModal');
 const driftTitle = document.getElementById('driftTitle');
 const driftBody = document.getElementById('driftBody');
 const driftCloseBtn = document.getElementById('driftCloseBtn');
+const paletteToggleBtn = document.getElementById('paletteToggleBtn');
+const objectPalette = document.getElementById('objectPalette');
+const paletteSearch = document.getElementById('paletteSearch');
+const paletteList = document.getElementById('paletteList');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -148,6 +152,11 @@ async function init() {
     linterDismissBtn.addEventListener('click', handleDismissSuggestions);
     compareOrgBtn.addEventListener('click', openDriftCheck);
     driftCloseBtn.addEventListener('click', closeDriftModal);
+    paletteToggleBtn.addEventListener('click', togglePalette);
+    paletteSearch.addEventListener('input', renderPaletteList);
+    canvas.parentElement.addEventListener('dragover', handleCanvasDragOver);
+    canvas.parentElement.addEventListener('dragleave', handleCanvasDragLeave);
+    canvas.parentElement.addEventListener('drop', handleCanvasDrop);
     saveBtn.addEventListener('click', doSave);
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
     exportMermaidBtn.addEventListener('click', doExportMermaid);
@@ -767,6 +776,69 @@ function addAllDriftFields(entityName) {
         .map((r) => (r.entityName === entityName ? { ...r, newFields: [] } : r))
         .filter((r) => r.newFields.length || r.missingFields.length);
     renderDriftModal();
+}
+
+// ── Object palette (drag-and-drop) ──
+// Direct port of the LWC's handlePaletteDragStart/handleCanvasDrop, one
+// deliberate simplification: the original also tracks a manual x/y drop
+// position per entity (erPositions), overriding the geometry engine's
+// automatic layout for that one entity. This port's canvas is always
+// auto-laid-out (no manual position tracking exists anywhere else in
+// this port either), so a drop just adds the entity via the same
+// importFromOrg message Import from Org already uses, letting the
+// geometry engine place it — not a missing feature, a consistent choice
+// given nothing else here overrides the auto layout.
+
+function togglePalette() {
+    objectPalette.hidden = !objectPalette.hidden;
+    if (!objectPalette.hidden) {
+        if (allObjectNames.length === 0) vscode.postMessage({ type: 'requestObjectList' });
+        renderPaletteList();
+    }
+}
+
+function renderPaletteList() {
+    const term = paletteSearch.value.trim().toLowerCase();
+    const matches = term ? allObjectNames.filter((n) => n.toLowerCase().includes(term)) : allObjectNames;
+    paletteList.innerHTML = '';
+    matches.slice(0, 300).forEach((name) => {
+        const item = document.createElement('div');
+        item.className = 'palette-item';
+        item.textContent = name;
+        item.draggable = true;
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', name);
+            e.dataTransfer.effectAllowed = 'copy';
+        });
+        paletteList.appendChild(item);
+    });
+}
+
+function handleCanvasDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    canvas.parentElement.classList.add('drag-over');
+}
+
+function handleCanvasDragLeave() {
+    canvas.parentElement.classList.remove('drag-over');
+}
+
+function handleCanvasDrop(e) {
+    e.preventDefault();
+    canvas.parentElement.classList.remove('drag-over');
+    const name = e.dataTransfer.getData('text/plain');
+    if (!name) return;
+    addEntityByDrop(name);
+}
+
+function addEntityByDrop(name) {
+    let existingNames = [];
+    if (editor.value.trim()) {
+        try { existingNames = parseEr(editor.value).entities.map((e) => e.name); } catch (e) { /* mid-typing / invalid DSL */ }
+    }
+    if (existingNames.some((n) => n.toLowerCase() === name.toLowerCase())) return; // already on canvas
+    vscode.postMessage({ type: 'importFromOrg', names: [name] });
 }
 
 function doImport() {

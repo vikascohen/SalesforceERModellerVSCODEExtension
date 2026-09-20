@@ -32,12 +32,17 @@
         <label class="toggle"><input type="checkbox" id="sharingViewToggle"> Sharing View</label>
         <span class="sep"></span>
         <button id="compareOrgBtn" title="Compare the DSL against the current org schema for every entity on canvas">Compare with Org</button>
+        <button id="paletteToggleBtn" title="Show a searchable, drag-and-drop object palette">Object Palette</button>
         <span class="status" id="statusText"></span>
     </div>
     <div class="main">
         <div class="dsl-editor-wrap">
             <textarea id="dslEditor" spellcheck="false" placeholder="entity Account : Name, Industry&#10;entity Contact : LastName&#10;Contact.AccountId -&gt; Account"></textarea>
             <div id="dslSuggestDropdown" class="suggest-dropdown" hidden></div>
+        </div>
+        <div id="objectPalette" class="object-palette" hidden>
+            <input id="paletteSearch" type="text" placeholder="Search objects\u2026">
+            <div id="paletteList" class="palette-list"></div>
         </div>
         <div class="canvas-wrap">
             <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
