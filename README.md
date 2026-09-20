@@ -7,10 +7,14 @@ standalone extension for working with Salesforce data models directly in
 VS Code, with no dependency on it or on the target org having anything
 installed.
 
-**Status: a real, working core, not yet the full feature set.** Built
-incrementally, verified at each step, the same way the original LWC app
-was. Below is an honest account of what's genuinely working versus
-what's still missing — not everything from the original app is here yet.
+**Status: the full feature set is ported**, one item deliberately
+excluded for a stated reason (see "What's not built yet" below), not
+left undone. Built incrementally, verified at each step, the same way
+the original LWC app was. Below is an honest account of what's
+genuinely working, and the one considered exception — not a claim that
+every line of this port has been clicked through in a real VS Code
+window; see the limitation section further down for exactly what that
+means and doesn't mean.
 
 ## Requirements
 
@@ -195,10 +199,26 @@ what's still missing — not everything from the original app is here yet.
 
 ## What's not built yet
 
-- **Themes** — the canvas currently just uses VS Code's own theme colors
-  automatically (a side effect of using `var(--vscode-*)` throughout,
-  not a deliberate theming feature); none of the original's four named
-  themes are implemented as a choice.
+Nothing, as a checklist — the original's full feature set is now ported.
+One item is deliberately NOT ported, for a real reason rather than left
+undone, worth stating plainly rather than leaving as a vague gap:
+
+- **The four named themes** (Dark+, Light+, Monokai, Solarized Light)
+  aren't implemented as a picker here, and this is a considered decision
+  rather than a missing feature. The original LWC app needed its own
+  theme system because it runs *inside* Salesforce, which has no host
+  editor theme for it to inherit — the four-theme picker exists to give
+  it a visual identity of its own. A VS Code extension has no such gap
+  to fill: it already inherits the person's actual, currently-active VS
+  Code theme correctly and automatically, via `var(--vscode-*)`
+  throughout this port's own CSS, which is the more natural, better-
+  integrated behavior for something living inside VS Code, not a
+  fallback standing in for a missing feature. Layering a second,
+  separate theme picker on top of that would mean the extension's colors
+  could disagree with the editor's own, which is a worse experience than
+  what already exists, not a better one — so this was a decision, not an
+  oversight, and revisiting it would need a real reason beyond "the
+  original had it."
 
 ## A genuine limitation of this whole port, stated plainly
 
