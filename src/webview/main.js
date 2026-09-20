@@ -6,6 +6,7 @@
 import { currentSearchTerm, filterObjectNames, appendNameToInput } from './paletteFilter.js';
 import { detectDslContext } from './dslIntellisense.js';
 import { buildFieldMarkerSuffix } from './fieldMarkers.js';
+import { scanForMissingRelationships } from './relationshipLinter.js';
 
 const vscode = acquireVsCodeApi();
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -29,6 +30,11 @@ const dictionaryTableWrap = document.getElementById('dictionaryTableWrap');
 const heatmapToggle = document.getElementById('heatmapToggle');
 const sharingViewToggle = document.getElementById('sharingViewToggle');
 const hoverCard = document.getElementById('hoverCard');
+const linterPanel = document.getElementById('linterPanel');
+const linterTitle = document.getElementById('linterTitle');
+const linterList = document.getElementById('linterList');
+const linterAddAllBtn = document.getElementById('linterAddAllBtn');
+const linterDismissBtn = document.getElementById('linterDismissBtn');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -62,6 +68,11 @@ let dictionaryUsagePending = false;
 // Sharing View / Heatmap state — lowercased entity name -> data
 let sharingModels = {};
 let recordCounts = {};
+
+// Smart relationship linter state
+let missingRelationshipSuggestions = [];
+let dismissedSuggestionKeys = new Set();
+let relScanTimer = null;
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -124,6 +135,8 @@ async function init() {
     dictionaryExportBtn.addEventListener('click', exportDictionaryToExcel);
     heatmapToggle.addEventListener('change', () => { requestSharingAndHeatmapData(); scheduleRender(); });
     sharingViewToggle.addEventListener('change', () => { requestSharingAndHeatmapData(); scheduleRender(); });
+    linterAddAllBtn.addEventListener('click', handleAddAllSuggestions);
+    linterDismissBtn.addEventListener('click', handleDismissSuggestions);
     saveBtn.addEventListener('click', doSave);
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
     exportMermaidBtn.addEventListener('click', doExportMermaid);
@@ -533,6 +546,82 @@ function hideHoverCard() {
     hoverCard.hidden = true;
 }
 
+// ── Smart relationship linter ──
+// Notices relationship fields on entities already on the canvas that
+// point at another entity also on the canvas, but aren't wired up as a
+// DSL relationship line yet. Ported from the LWC's own
+// scheduleRelationshipScan/scanForMissingRelationships.
+
+function scheduleRelationshipScan() {
+    clearTimeout(relScanTimer);
+    relScanTimer = setTimeout(runRelationshipScan, 600);
+}
+
+async function runRelationshipScan() {
+    const names = currentEntityNames();
+    if (!names.length) {
+        missingRelationshipSuggestions = [];
+        renderLinterPanel();
+        return;
+    }
+
+    // Reuses the same on-demand field cache and fetch mechanism the DSL
+    // intellisense already uses — a no-op for anything already cached.
+    names.forEach((n) => requestFieldsForEntity(n));
+
+    let model;
+    try {
+        model = parseEr(editor.value);
+    } catch (e) {
+        return; // mid-typing / invalid DSL — leave whatever was showing
+    }
+
+    missingRelationshipSuggestions = scanForMissingRelationships(
+        model, names, objectFieldsCache, dismissedSuggestionKeys
+    );
+    renderLinterPanel();
+}
+
+function renderLinterPanel() {
+    if (!missingRelationshipSuggestions.length) {
+        linterPanel.hidden = true;
+        return;
+    }
+    linterPanel.hidden = false;
+    linterTitle.textContent = `${missingRelationshipSuggestions.length} relationship${missingRelationshipSuggestions.length === 1 ? '' : 's'} not wired up`;
+    linterList.innerHTML = '';
+    missingRelationshipSuggestions.forEach((s) => {
+        const item = document.createElement('div');
+        item.className = 'linter-item';
+        const label = document.createElement('span');
+        label.textContent = s.line;
+        label.style.flex = '1';
+        const addBtn = document.createElement('button');
+        addBtn.textContent = 'Add';
+        addBtn.addEventListener('click', () => appendDslLines([s.line]));
+        item.appendChild(label);
+        item.appendChild(addBtn);
+        linterList.appendChild(item);
+    });
+}
+
+function appendDslLines(lines) {
+    const trimmed = editor.value.replace(/\s+$/, '');
+    editor.value = (trimmed ? trimmed + '\n' : '') + lines.join('\n') + '\n';
+    markDirty();
+    scheduleRender();
+}
+
+function handleAddAllSuggestions() {
+    appendDslLines(missingRelationshipSuggestions.map((s) => s.line));
+}
+
+function handleDismissSuggestions() {
+    missingRelationshipSuggestions.forEach((s) => dismissedSuggestionKeys.add(s.id));
+    missingRelationshipSuggestions = [];
+    renderLinterPanel();
+}
+
 function doImport() {
     const raw = importNames.value.trim();
     if (!raw) { setStatus('Enter one or more object API names first.', true); return; }
@@ -573,6 +662,7 @@ function render() {
         const geo = buildErGeometry(model, {}, {}, {});
         drawGeometry(geo);
         requestSharingAndHeatmapData();
+        scheduleRelationshipScan();
         setStatus('');
     } catch (e) {
         setStatus(e.message || String(e), true);

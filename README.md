@@ -135,15 +135,24 @@ what's still missing — not everything from the original app is here yet.
   original: the Sharing Rules / Apex Sharing detection section (a third
   Apex method, `getSharingSignals()`, reading `__Share` table `RowCause`
   values) isn't ported yet — this is a stated gap, not an oversight.
+- **Smart relationship linter**: 600ms after any edit, scans every
+  entity on the canvas for relationship fields pointing at another
+  entity also on the canvas that isn't yet wired up as a DSL
+  relationship line, and shows them in a panel with per-item Add, Add
+  All, and Dismiss (dismissed suggestions stay dismissed for the rest of
+  the session). The scan itself is a pure, unit-tested function (6
+  tests) ported directly from the LWC's own
+  `scanForMissingRelationships` — separate from the DOM wiring around
+  it, matching the same testing split used for DSL autocomplete and
+  object-name filtering elsewhere in this port.
 
 ## What's not built yet
 
 - **Drag-and-drop from a visual palette** — the object list now feeds a
   text-based autocomplete (above), but there's no separate visual
   palette panel to drag entities from directly onto the canvas yet.
-- **The smart relationship linter, schema drift comparison, and Sharing
-  Rules / Apex Sharing detection on the hover card** — none of these
-  exist yet.
+- **Schema drift comparison, and Sharing Rules / Apex Sharing detection
+  on the hover card** — neither exists yet.
 - **Multi-file tabs** — each `Salesforce ER Modeller: Open` opens a
   single panel; there's no tab strip for working on several diagrams at
   once yet.
