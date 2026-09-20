@@ -135,3 +135,100 @@ html, body {
 #canvas {
     display: block;
 }
+
+/* ── Data Dictionary ── */
+.dictionary-panel {
+    position: fixed;
+    top: 40px; /* below the toolbar */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    background: var(--vscode-editor-background);
+    z-index: 20;
+}
+
+.dictionary-objects {
+    width: 260px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--vscode-panel-border);
+    display: flex;
+    flex-direction: column;
+}
+
+.dictionary-objects input {
+    margin: 8px;
+    padding: 4px 6px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, transparent);
+}
+
+.dictionary-object-list {
+    overflow-y: auto;
+    flex: 1;
+}
+
+.dictionary-object-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.dictionary-object-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.dictionary-object-item.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.dictionary-detail {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.dictionary-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+#dictionaryDetailTitle {
+    font-weight: 600;
+    flex: 1;
+}
+
+.dictionary-table-wrap {
+    flex: 1;
+    overflow: auto;
+    padding: 8px 12px;
+}
+
+.dictionary-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12px;
+}
+
+.dictionary-table th, .dictionary-table td {
+    text-align: left;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    white-space: nowrap;
+}
+
+.dictionary-table td.dictionary-desc-cell {
+    white-space: normal;
+    max-width: 320px;
+}
+
+.dictionary-pk-marker {
+    color: gold;
+    font-weight: bold;
+}

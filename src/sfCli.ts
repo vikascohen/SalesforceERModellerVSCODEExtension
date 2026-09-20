@@ -183,6 +183,100 @@ export async function listAllObjectNames(): Promise<string[]> {
     return names.sort();
 }
 
+export interface FieldDescriptionInfo {
+    apiName: string;
+    description: string | null;
+    lastModifiedDate: string | null;
+}
+
+export async function getFieldDescriptions(objectApiName: string): Promise<FieldDescriptionInfo[]> {
+    if (!/^[A-Za-z0-9_]+$/.test(objectApiName)) {
+        throw new SfCliError(`"${objectApiName}" is not a valid object API name.`);
+    }
+    // FieldDefinition is metadata-catalog data, queried via the Tooling
+    // API -- the same source (and the same field names: QualifiedApiName,
+    // Description, LastModifiedDate) the original Apex version reads via
+    // WITH USER_MODE SOQL. Viewing it generally requires "View Setup and
+    // Configuration" in the org; if that's missing, this query comes back
+    // empty rather than erroring, which the caller treats as "no
+    // descriptions available" rather than a hard failure.
+    const soql = `SELECT QualifiedApiName, Description, LastModifiedDate FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '${objectApiName}'`;
+    const records = await runSoqlQuery(soql, true);
+    return records.map((r) => ({
+        apiName: r.QualifiedApiName,
+        description: r.Description || null,
+        lastModifiedDate: r.LastModifiedDate || null
+    }));
+}
+
+export async function getRecordCount(objectApiName: string): Promise<number> {
+    if (!/^[A-Za-z0-9_]+$/.test(objectApiName)) {
+        throw new SfCliError(`"${objectApiName}" is not a valid object API name.`);
+    }
+    const result = await runSfJson(['data', 'query', '--query', `SELECT COUNT() FROM ${objectApiName}`, '--json']);
+    return (result && typeof result.totalSize === 'number') ? result.totalSize : 0;
+}
+
+export interface FieldUsageStats {
+    percentages: Record<string, number>;
+    totalRecords: number;
+    error?: string;
+}
+
+/**
+ * On-demand field population percentage for the Data Dictionary — how
+ * many of an object's existing records have a non-blank value in each
+ * field. Direct port of SchemaMetadataController.cls's
+ * getFieldUsageStats(): batches multiple COUNT(fieldName) expressions
+ * into one aggregate query per batch (15 fields at a time — the same
+ * batch size, chosen there for the same reason: some long-text field
+ * types don't tolerate being counted alongside many others in one
+ * query, so a batch that fails falls back to "not available" for just
+ * its own fields rather than the whole object), instead of one query
+ * per field, which is what an earlier, less efficient draft of this
+ * function did before being replaced with this direct port.
+ */
+export async function getFieldUsageStats(objectApiName: string, fieldApiNames: string[]): Promise<FieldUsageStats> {
+    const percentages: Record<string, number> = {};
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(objectApiName)) {
+        return { percentages, totalRecords: 0, error: 'Invalid object name.' };
+    }
+
+    let totalRecords: number;
+    try {
+        totalRecords = await getRecordCount(objectApiName);
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { percentages, totalRecords: 0, error: `Could not count records: ${msg}` };
+    }
+
+    const safeFields = fieldApiNames.filter((f) => /^[A-Za-z][A-Za-z0-9_]*$/.test(f));
+    if (totalRecords === 0 || safeFields.length === 0) {
+        safeFields.forEach((f) => { percentages[f] = 0; });
+        return { percentages, totalRecords };
+    }
+
+    const batchSize = 15;
+    for (let i = 0; i < safeFields.length; i += batchSize) {
+        const batch = safeFields.slice(i, i + batchSize);
+        try {
+            const selectParts = batch.map((f) => `COUNT(${f})`);
+            const soql = `SELECT ${selectParts.join(', ')} FROM ${objectApiName}`;
+            const result = await runSfJson(['data', 'query', '--query', soql, '--json']);
+            const row = (result && result.records && result.records[0]) || {};
+            batch.forEach((f, idx) => {
+                const cnt = row[`expr${idx}`];
+                percentages[f] = (typeof cnt === 'number' ? cnt : 0) / totalRecords * 100;
+            });
+        } catch (e) {
+            // This batch's fields fall back to "not available" (absent
+            // from the map) rather than failing every other batch.
+        }
+    }
+
+    return { percentages, totalRecords };
+}
+
 export async function runSoqlQuery(soql: string, useToolingApi: boolean): Promise<any[]> {
     const args = ['data', 'query', '--query', soql, '--json'];
     if (useToolingApi) args.push('--use-tooling-api');

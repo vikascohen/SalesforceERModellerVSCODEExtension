@@ -53,5 +53,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/vikascohen/SalesforceERModellerVSCODEExtension.git"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
   }
 }

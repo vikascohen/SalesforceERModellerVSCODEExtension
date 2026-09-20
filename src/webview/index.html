@@ -26,6 +26,8 @@
         <button id="exportDrawioBtn" title="Export as a draw.io / diagrams.net file">Export draw.io</button>
         <span class="sep"></span>
         <label class="toggle"><input type="checkbox" id="focusToggle"> Focus mode</label>
+        <span class="sep"></span>
+        <button id="dictionaryToggleBtn" title="Browse field descriptions, last-modified dates, and on-demand usage percentages">Data Dictionary</button>
         <span class="status" id="statusText"></span>
     </div>
     <div class="main">
@@ -35,6 +37,22 @@
         </div>
         <div class="canvas-wrap">
             <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+    </div>
+
+    <div id="dictionaryPanel" class="dictionary-panel" hidden>
+        <div class="dictionary-objects">
+            <input id="dictionarySearch" type="text" placeholder="Search objects\u2026">
+            <div id="dictionaryObjectList" class="dictionary-object-list"></div>
+        </div>
+        <div class="dictionary-detail">
+            <div class="dictionary-detail-header">
+                <span id="dictionaryDetailTitle">Select an object</span>
+                <button id="dictionaryUsageBtn" hidden>Calculate Usage</button>
+                <button id="dictionaryExportBtn" hidden>Export to Excel</button>
+                <button id="dictionaryCloseBtn" title="Close Data Dictionary">\u2715</button>
+            </div>
+            <div id="dictionaryTableWrap" class="dictionary-table-wrap"></div>
         </div>
     </div>
 

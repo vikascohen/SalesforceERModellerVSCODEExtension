@@ -17,6 +17,15 @@ const importBtn = document.getElementById('importBtn');
 const importNames = document.getElementById('importNames');
 const suggestDropdown = document.getElementById('suggestDropdown');
 const dslSuggestDropdown = document.getElementById('dslSuggestDropdown');
+const dictionaryToggleBtn = document.getElementById('dictionaryToggleBtn');
+const dictionaryPanel = document.getElementById('dictionaryPanel');
+const dictionarySearch = document.getElementById('dictionarySearch');
+const dictionaryObjectList = document.getElementById('dictionaryObjectList');
+const dictionaryDetailTitle = document.getElementById('dictionaryDetailTitle');
+const dictionaryUsageBtn = document.getElementById('dictionaryUsageBtn');
+const dictionaryExportBtn = document.getElementById('dictionaryExportBtn');
+const dictionaryCloseBtn = document.getElementById('dictionaryCloseBtn');
+const dictionaryTableWrap = document.getElementById('dictionaryTableWrap');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -41,6 +50,11 @@ let dslSuggestItems = [];
 let dslReplaceStart = 0;
 let dslReplaceEnd = 0;
 let charWidthCache = {};
+
+// Data Dictionary state
+let dictionarySelectedObject = null;
+let dictionaryRow = null; // { apiName, label, isCustom, fields: [...] }
+let dictionaryUsagePending = false;
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -96,6 +110,11 @@ async function init() {
         }
     });
     openBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestOpen' }));
+    dictionaryToggleBtn.addEventListener('click', openDictionary);
+    dictionaryCloseBtn.addEventListener('click', closeDictionary);
+    dictionarySearch.addEventListener('input', renderDictionaryObjectList);
+    dictionaryUsageBtn.addEventListener('click', requestCalculateUsage);
+    dictionaryExportBtn.addEventListener('click', exportDictionaryToExcel);
     saveBtn.addEventListener('click', doSave);
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
     exportMermaidBtn.addEventListener('click', doExportMermaid);
@@ -308,6 +327,102 @@ function handleDslEditorKeyDown(e) {
     }
 }
 
+// ── Data Dictionary ──
+
+function openDictionary() {
+    dictionaryPanel.hidden = false;
+    if (allObjectNames.length === 0) vscode.postMessage({ type: 'requestObjectList' });
+    renderDictionaryObjectList();
+}
+
+function closeDictionary() {
+    dictionaryPanel.hidden = true;
+}
+
+function renderDictionaryObjectList() {
+    const term = dictionarySearch.value.trim().toLowerCase();
+    const matches = term
+        ? allObjectNames.filter((n) => n.toLowerCase().includes(term))
+        : allObjectNames;
+    dictionaryObjectList.innerHTML = '';
+    matches.slice(0, 200).forEach((name) => {
+        const item = document.createElement('div');
+        item.className = 'dictionary-object-item' + (name === dictionarySelectedObject ? ' selected' : '');
+        item.textContent = name;
+        item.addEventListener('click', () => selectDictionaryObject(name));
+        dictionaryObjectList.appendChild(item);
+    });
+}
+
+function selectDictionaryObject(name) {
+    dictionarySelectedObject = name;
+    dictionaryRow = null;
+    dictionaryUsagePending = false;
+    renderDictionaryObjectList();
+    dictionaryDetailTitle.textContent = 'Loading ' + name + '\u2026';
+    dictionaryUsageBtn.hidden = true;
+    dictionaryExportBtn.hidden = true;
+    dictionaryTableWrap.innerHTML = '';
+    vscode.postMessage({ type: 'requestDictionaryForObject', entityName: name });
+}
+
+function renderDictionaryTable() {
+    if (!dictionaryRow) return;
+    dictionaryDetailTitle.textContent = `${dictionaryRow.label} (${dictionaryRow.apiName})`;
+    dictionaryUsageBtn.hidden = false;
+    dictionaryUsageBtn.disabled = dictionaryUsagePending;
+    dictionaryUsageBtn.textContent = dictionaryUsagePending ? 'Calculating\u2026' : 'Calculate Usage';
+    dictionaryExportBtn.hidden = false;
+
+    const table = document.createElement('table');
+    table.className = 'dictionary-table';
+    table.innerHTML = `
+        <thead><tr>
+            <th></th><th>API Name</th><th>Label</th><th>Type</th>
+            <th>Required</th><th>Description</th><th>Last Modified</th><th>% Populated</th>
+        </tr></thead>`;
+    const tbody = document.createElement('tbody');
+    dictionaryRow.fields.forEach((f) => {
+        const tr = document.createElement('tr');
+        const pctText = f.percentUsed == null ? '\u2014' : Math.round(f.percentUsed * 10) / 10 + '%';
+        tr.innerHTML = `
+            <td>${f.isPrimaryKey ? '<span class="dictionary-pk-marker">\u2605</span>' : ''}</td>
+            <td>${escapeHtml(f.apiName)}</td>
+            <td>${escapeHtml(f.label || '')}</td>
+            <td>${escapeHtml(f.friendlyType || f.dataType || '')}</td>
+            <td>${f.required ? 'Yes' : 'No'}</td>
+            <td class="dictionary-desc-cell">${escapeHtml(f.description || '')}</td>
+            <td>${escapeHtml(f.lastModifiedDate || '')}</td>
+            <td>${pctText}</td>`;
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    dictionaryTableWrap.innerHTML = '';
+    dictionaryTableWrap.appendChild(table);
+}
+
+function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+function requestCalculateUsage() {
+    if (!dictionaryRow) return;
+    // Matches the original: the primary key field is always 100% by
+    // definition and is never included in the actual scan, since
+    // scanning it would just re-confirm what's already known.
+    const fieldNames = dictionaryRow.fields.filter((f) => !f.isPrimaryKey).map((f) => f.apiName);
+    dictionaryUsagePending = true;
+    renderDictionaryTable();
+    vscode.postMessage({ type: 'requestFieldUsageStats', entityName: dictionaryRow.apiName, fieldNames });
+}
+
+function exportDictionaryToExcel() {
+    if (!dictionaryRow) return;
+    vscode.postMessage({ type: 'exportDictionaryToExcel', row: dictionaryRow });
+}
+
 function doImport() {
     const raw = importNames.value.trim();
     if (!raw) { setStatus('Enter one or more object API names first.', true); return; }
@@ -502,6 +617,29 @@ function handleExtensionMessage(event) {
         // rather than requiring another keystroke to see it, matching
         // the LWC's own re-render-after-fetch behavior.
         updateDslSuggestions();
+    } else if (msg.type === 'dictionaryRow') {
+        if (msg.row && msg.row.apiName === dictionarySelectedObject) {
+            dictionaryRow = msg.row;
+            renderDictionaryTable();
+        }
+    } else if (msg.type === 'dictionaryError') {
+        if (dictionarySelectedObject) {
+            dictionaryDetailTitle.textContent = msg.message || 'Could not load this object.';
+        }
+    } else if (msg.type === 'fieldUsageStats') {
+        dictionaryUsagePending = false;
+        if (dictionaryRow && msg.entityName === dictionaryRow.apiName) {
+            const pct = (msg.stats && msg.stats.percentages) || {};
+            dictionaryRow = {
+                ...dictionaryRow,
+                fields: dictionaryRow.fields.map((f) => ({
+                    ...f,
+                    percentUsed: f.isPrimaryKey ? 100 : (pct[f.apiName] != null ? pct[f.apiName] : f.percentUsed)
+                }))
+            };
+            renderDictionaryTable();
+            if (msg.stats && msg.stats.error) setStatus(msg.stats.error, true);
+        }
     }
 }
 

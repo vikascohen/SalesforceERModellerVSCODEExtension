@@ -1,11 +1,15 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import ExcelJS from 'exceljs';
 import {
     describeObject,
     listAllObjectNames,
     getTargetOrg,
     listAuthenticatedOrgs,
     setTargetOrg,
+    getFieldDescriptions,
+    getRecordCount,
+    getFieldUsageStats,
     SfCliError
 } from './sfCli';
 import { classifyDescribe, buildErSource, ClassifiedObject } from './schemaService';
@@ -170,6 +174,15 @@ class ErModellerPanel {
             case 'requestFieldsForEntity':
                 await this.handleRequestFieldsForEntity(msg.entityName as string);
                 return;
+            case 'requestDictionaryForObject':
+                await this.handleRequestDictionaryForObject(msg.entityName as string);
+                return;
+            case 'requestFieldUsageStats':
+                await this.handleRequestFieldUsageStats(msg.entityName as string, msg.fieldNames as string[]);
+                return;
+            case 'exportDictionaryToExcel':
+                await this.handleExportDictionaryToExcel(msg.row);
+                return;
             case 'dirtyChanged':
                 this.isDirty = !!msg.dirty;
                 this.updateTitle();
@@ -255,6 +268,65 @@ class ErModellerPanel {
         }
     }
 
+    private async handleRequestDictionaryForObject(entityName: string): Promise<void> {
+        try {
+            const raw = await describeObject(entityName);
+            const classified = classifyDescribe(raw);
+
+            // Descriptions come from a separate Tooling API query
+            // (FieldDefinition) that needs "View Setup and Configuration" —
+            // if that's missing, fields still show without descriptions
+            // rather than failing the whole dictionary lookup.
+            let descByField: Record<string, { description: string | null; lastModifiedDate: string | null }> = {};
+            try {
+                const descs = await getFieldDescriptions(entityName);
+                descs.forEach((d) => { descByField[d.apiName] = d; });
+            } catch (e) {
+                // No descriptions available — proceed without them.
+            }
+
+            const fields = classified.fields.map((f) => {
+                const isPrimaryKey = f.apiName === 'Id';
+                const desc = descByField[f.apiName];
+                return {
+                    ...f,
+                    isPrimaryKey,
+                    description: desc ? desc.description : null,
+                    lastModifiedDate: desc ? desc.lastModifiedDate : null,
+                    // Matches the original: the Id field is always 100%
+                    // used by definition, every other field starts as
+                    // "not yet calculated" (null) until the user opts in
+                    // via Calculate Usage — this is never computed
+                    // automatically, since it scans actual record data.
+                    percentUsed: isPrimaryKey ? 100 : null
+                };
+            });
+
+            this.panel.webview.postMessage({
+                type: 'dictionaryRow',
+                row: { apiName: classified.apiName, label: classified.label, isCustom: classified.isCustom, fields }
+            });
+        } catch (e) {
+            this.panel.webview.postMessage({
+                type: 'dictionaryError',
+                message: e instanceof SfCliError ? e.message : (e instanceof Error ? e.message : String(e))
+            });
+        }
+    }
+
+    private async handleRequestFieldUsageStats(entityName: string, fieldNames: string[]): Promise<void> {
+        try {
+            const stats = await getFieldUsageStats(entityName, fieldNames);
+            this.panel.webview.postMessage({ type: 'fieldUsageStats', entityName, stats });
+        } catch (e) {
+            this.panel.webview.postMessage({
+                type: 'fieldUsageStats',
+                entityName,
+                stats: { percentages: {}, totalRecords: 0, error: e instanceof Error ? e.message : String(e) }
+            });
+        }
+    }
+
     private async handleSave(text: string): Promise<void> {
         if (!this.currentFileUri) {
             await this.handleSaveAs(text);
@@ -291,6 +363,48 @@ class ErModellerPanel {
         this.isDirty = false;
         this.updateTitle();
         this.panel.webview.postMessage({ type: 'loadDsl', dsl: Buffer.from(bytes).toString('utf8') });
+    }
+
+    private async handleExportDictionaryToExcel(row: any): Promise<void> {
+        if (!row || !Array.isArray(row.fields)) return;
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet(row.apiName || 'Fields');
+            sheet.columns = [
+                { header: 'API Name', key: 'apiName', width: 28 },
+                { header: 'Label', key: 'label', width: 24 },
+                { header: 'Type', key: 'type', width: 20 },
+                { header: 'Required', key: 'required', width: 10 },
+                { header: 'Description', key: 'description', width: 50 },
+                { header: 'Last Modified', key: 'lastModifiedDate', width: 14 },
+                { header: '% Populated', key: 'percentUsed', width: 12 }
+            ];
+            row.fields.forEach((f: any) => {
+                sheet.addRow({
+                    apiName: f.apiName,
+                    label: f.label || '',
+                    type: f.friendlyType || f.dataType || '',
+                    required: f.required ? 'Yes' : 'No',
+                    description: f.description || '',
+                    lastModifiedDate: f.lastModifiedDate || '',
+                    percentUsed: f.percentUsed == null ? '' : Math.round(f.percentUsed * 10) / 10
+                });
+            });
+            sheet.getRow(1).font = { bold: true };
+
+            const uri = await vscode.window.showSaveDialog({
+                filters: { 'Excel Workbook': ['xlsx'] },
+                saveLabel: 'Export',
+                defaultUri: vscode.Uri.file(`${row.apiName || 'DataDictionary'}.xlsx`)
+            });
+            if (!uri) return;
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            await vscode.workspace.fs.writeFile(uri, Buffer.from(buffer));
+            vscode.window.showInformationMessage(`Exported to ${uri.fsPath}`);
+        } catch (e) {
+            vscode.window.showErrorMessage(`Could not export to Excel: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     private async handleExportToFile(content: string, extension: string, filterLabel: string): Promise<void> {
