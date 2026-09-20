@@ -490,6 +490,7 @@ function currentEntityNames() {
 }
 
 let lastFetchedEntityNamesKey = null; // avoids re-fetching sharing/heatmap data on every keystroke when the entity set hasn't actually changed
+let hoverTimer = null; // module-level, not per-box — see drawGeometry's own comment on why
 
 function requestSharingAndHeatmapData(forceFetch) {
     const names = currentEntityNames();
@@ -914,6 +915,21 @@ function onCanvasClick(e) {
 }
 
 function drawGeometry(geo) {
+    // Real bug this avoids, found during review rather than reported:
+    // scheduleRender's debounce (300ms) is shorter than the hover show
+    // delay (350ms). Hover a box, then type within that 300ms window,
+    // and the OLD box's pending hover timer — a per-box closure — would
+    // still fire after this re-render replaces canvas.innerHTML, calling
+    // showHoverCard for an element that no longer exists in the DOM.
+    // Worse, since that element is detached, its own mouseleave can
+    // never fire to dismiss the card afterward — a hover card that
+    // shows up and then never goes away. Clearing any pending timer here
+    // — module-level, not per-box, since only one hover can ever be
+    // pending at a time regardless — invalidates it before it can fire
+    // against a stale element.
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+
     canvas.setAttribute('width', String(geo.svgWidth));
     canvas.setAttribute('height', String(geo.svgHeight));
     canvas.innerHTML = '';
@@ -963,7 +979,6 @@ function drawGeometry(geo) {
         g.setAttribute('opacity', dimmed ? '0.2' : '1');
         g.style.cursor = focusToggle.checked ? 'pointer' : 'default';
 
-        let hoverTimer = null;
         g.addEventListener('mouseenter', (e) => {
             const clientX = e.clientX;
             const clientY = e.clientY;
