@@ -12,6 +12,7 @@ import {
     getFieldUsageStats,
     getSharingModels,
     getRecordCounts,
+    getSharingSignals,
     SfCliError
 } from './sfCli';
 import { classifyDescribe, buildErSource, ClassifiedObject } from './schemaService';
@@ -190,6 +191,9 @@ class ErModellerPanel {
                 return;
             case 'requestRecordCounts':
                 await this.handleRequestRecordCounts(msg.entityNames as string[]);
+                return;
+            case 'requestSharingSignals':
+                await this.handleRequestSharingSignals(msg.entityNames as string[]);
                 return;
             case 'dirtyChanged':
                 this.isDirty = !!msg.dirty;
@@ -388,6 +392,15 @@ class ErModellerPanel {
             this.panel.webview.postMessage({ type: 'recordCounts', counts });
         } catch (e) {
             this.panel.webview.postMessage({ type: 'recordCounts', counts: {} });
+        }
+    }
+
+    private async handleRequestSharingSignals(entityNames: string[]): Promise<void> {
+        try {
+            const signals = await getSharingSignals(entityNames);
+            this.panel.webview.postMessage({ type: 'sharingSignals', signals });
+        } catch (e) {
+            this.panel.webview.postMessage({ type: 'sharingSignals', signals: {} });
         }
     }
 

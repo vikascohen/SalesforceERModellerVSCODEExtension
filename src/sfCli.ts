@@ -350,6 +350,68 @@ export async function getRecordCounts(objectApiNames: string[]): Promise<Record<
     return result;
 }
 
+const KNOWN_STANDARD_ROW_CAUSES = new Set([
+    'Owner', 'Manual', 'Rule', 'Team', 'Territory', 'Territory2',
+    'TerritoryManual', 'Territory2Manual', 'ImplicitChild', 'ImplicitParent'
+]);
+
+export interface SharingSignals {
+    shareTableAvailable: boolean;
+    isCustomObject: boolean;
+    hasSharingRule: boolean;
+    hasApexSharing: boolean;
+}
+
+/**
+ * Direct port of SchemaMetadataController.cls's getSharingSignals().
+ * Deliberately Tooling-API-free, same reasoning as the rest of this
+ * app: reading the actual SharingRules metadata needs a Named
+ * Credential and a Connected App, neither required for anything else
+ * here. Reads the runtime EFFECT instead — the distinct RowCause values
+ * present on the object's own __Share table, via GROUP BY RowCause
+ * (plain regular SOQL, one query per object, no static Share-object
+ * type referenced).
+ *
+ * hasApexSharing is only reliably meaningful on a CUSTOM object —
+ * standard objects can't define their own Apex Sharing Reason at all,
+ * so Apex Managed Sharing there uses the same RowCause ('Manual') a
+ * person manually sharing one record also produces. The caller must
+ * show "not determinable" for a standard object rather than a definite
+ * Yes/No — see the original Apex comment on this exact point.
+ */
+export async function getSharingSignals(objectApiNames: string[]): Promise<Record<string, SharingSignals>> {
+    const result: Record<string, SharingSignals> = {};
+    for (const rawName of objectApiNames) {
+        const name = (rawName || '').trim();
+        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) continue;
+
+        const signals: SharingSignals = {
+            shareTableAvailable: false,
+            isCustomObject: name.endsWith('__c'),
+            hasSharingRule: false,
+            hasApexSharing: false
+        };
+        try {
+            const rows = await runSoqlQuery(`SELECT RowCause FROM ${name}Share GROUP BY RowCause`, false);
+            signals.shareTableAvailable = true;
+            rows.forEach((row: any) => {
+                const rowCause = row.RowCause;
+                if (rowCause === 'Rule') {
+                    signals.hasSharingRule = true;
+                } else if (!KNOWN_STANDARD_ROW_CAUSES.has(rowCause)) {
+                    signals.hasApexSharing = true;
+                }
+            });
+        } catch (e) {
+            // No __Share table for this object at all, or genuinely
+            // inaccessible — "no sharing data available" either way.
+            signals.shareTableAvailable = false;
+        }
+        result[name] = signals;
+    }
+    return result;
+}
+
 export async function runSoqlQuery(soql: string, useToolingApi: boolean): Promise<any[]> {
     const args = ['data', 'query', '--query', soql, '--json'];
     if (useToolingApi) args.push('--use-tooling-api');

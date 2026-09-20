@@ -68,6 +68,7 @@ let dictionaryUsagePending = false;
 // Sharing View / Heatmap state — lowercased entity name -> data
 let sharingModels = {};
 let recordCounts = {};
+let sharingSignals = {};
 
 // Smart relationship linter state
 let missingRelationshipSuggestions = [];
@@ -474,6 +475,7 @@ function requestSharingAndHeatmapData() {
     if (!names.length) return;
     if (sharingViewToggle.checked) {
         vscode.postMessage({ type: 'requestSharingModels', entityNames: names });
+        vscode.postMessage({ type: 'requestSharingSignals', entityNames: names });
     }
     if (heatmapToggle.checked) {
         vscode.postMessage({ type: 'requestRecordCounts', entityNames: names });
@@ -481,13 +483,7 @@ function requestSharingAndHeatmapData() {
 }
 
 // ── Object summary hover card ──
-// Ported from the LWC's own sharingBadgeFor/showHoverCard. One
-// deliberate, stated scope reduction from the original: the Sharing
-// Rules / Apex Sharing detection (a third Apex method, getSharingSignals,
-// reading __Share table RowCause values) isn't ported yet, so this
-// shows field count, object type, record count/freshness, and sharing
-// model, but not that third section — see README for this as a stated
-// gap, not an oversight.
+// Ported from the LWC's own sharingBadgeFor/showHoverCard.
 
 function sharingBadgeFor(model) {
     const map = {
@@ -534,6 +530,25 @@ function showHoverCard(entityName, box, clientX, clientY) {
             (sharing && sharing.internalModel ? escapeHtml(sharingBadgeFor(sharing.internalModel)) : 'Unknown') + '</span></div>';
         html += '<div class="hover-card-row"><span class="hover-card-label">External Sharing</span><span>' +
             (sharing && sharing.externalModel ? escapeHtml(sharingBadgeFor(sharing.externalModel)) : 'None configured') + '</span></div>';
+
+        // Reliable for any object: RowCause = 'Rule' means a sharing rule
+        // has fired. Apex Managed Sharing is only reliably distinguishable
+        // from plain manual sharing on a CUSTOM object — standard objects
+        // can't define their own Apex Sharing Reason at all, so this must
+        // say "not determinable" there rather than a definite Yes/No,
+        // which would be actively misleading, not just incomplete.
+        const signals = sharingSignals[key];
+        if (signals && signals.shareTableAvailable) {
+            html += '<div class="hover-card-row"><span class="hover-card-label">Sharing Rules</span><span>' +
+                (signals.hasSharingRule ? 'Yes' : 'No') + '</span></div>';
+            const apexSharingText = signals.isCustomObject
+                ? (signals.hasApexSharing ? 'Yes' : 'No')
+                : 'Not determinable on standard objects';
+            html += '<div class="hover-card-row"><span class="hover-card-label">Apex Sharing</span><span>' +
+                escapeHtml(apexSharingText) + '</span></div>';
+        } else if (signals) {
+            html += '<div class="hover-card-row"><span class="hover-card-label">Sharing Rules / Apex Sharing</span><span>No sharing data for this object</span></div>';
+        }
     }
 
     hoverCard.innerHTML = html;
@@ -896,6 +911,11 @@ function handleExtensionMessage(event) {
             recordCounts[name.toLowerCase()] = msg.counts[name];
         });
         scheduleRender();
+    } else if (msg.type === 'sharingSignals') {
+        sharingSignals = {};
+        Object.keys(msg.signals || {}).forEach((name) => {
+            sharingSignals[name.toLowerCase()] = msg.signals[name];
+        });
     }
 }
 
