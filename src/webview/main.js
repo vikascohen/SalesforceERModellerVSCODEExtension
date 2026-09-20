@@ -146,8 +146,8 @@ async function init() {
     dictionarySearch.addEventListener('input', renderDictionaryObjectList);
     dictionaryUsageBtn.addEventListener('click', requestCalculateUsage);
     dictionaryExportBtn.addEventListener('click', exportDictionaryToExcel);
-    heatmapToggle.addEventListener('change', () => { requestSharingAndHeatmapData(); scheduleRender(); });
-    sharingViewToggle.addEventListener('change', () => { requestSharingAndHeatmapData(); scheduleRender(); });
+    heatmapToggle.addEventListener('change', () => { requestSharingAndHeatmapData(true); scheduleRender(); });
+    sharingViewToggle.addEventListener('change', () => { requestSharingAndHeatmapData(true); scheduleRender(); });
     linterAddAllBtn.addEventListener('click', handleAddAllSuggestions);
     linterDismissBtn.addEventListener('click', handleDismissSuggestions);
     compareOrgBtn.addEventListener('click', openDriftCheck);
@@ -489,9 +489,26 @@ function currentEntityNames() {
     return lastModel.entities.map((e) => e.name);
 }
 
-function requestSharingAndHeatmapData() {
+let lastFetchedEntityNamesKey = null; // avoids re-fetching sharing/heatmap data on every keystroke when the entity set hasn't actually changed
+
+function requestSharingAndHeatmapData(forceFetch) {
     const names = currentEntityNames();
     if (!names.length) return;
+    // Real, worth-fixing inefficiency this avoids: render() runs on every
+    // keystroke (debounced), so without this check, editing an existing
+    // field's marker or fixing a typo would re-fetch sharing/heatmap data
+    // for every entity on canvas every time, even though the entity SET
+    // itself never changed — wasteful given these shell out to the sf
+    // CLI once per object. Only re-fetch when the set of names actually
+    // differs from what was last fetched (order-independent, via a
+    // sorted key). forceFetch is passed true from the toggle change
+    // handlers specifically, since turning a toggle off then back on
+    // with no DSL change in between would otherwise see an unchanged key
+    // and skip the fetch, leaving that toggle showing stale or no data.
+    const key = names.slice().sort().join('|');
+    if (key === lastFetchedEntityNamesKey && !forceFetch) return;
+    lastFetchedEntityNamesKey = key;
+
     if (sharingViewToggle.checked) {
         vscode.postMessage({ type: 'requestSharingModels', entityNames: names });
         vscode.postMessage({ type: 'requestSharingSignals', entityNames: names });
