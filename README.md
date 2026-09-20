@@ -240,7 +240,7 @@ happens.
 ```bash
 npm install
 npm run compile   # or: npm run watch
-npm test          # Jest — erDiagramLogic (30) + schemaService (14) + paletteFilter (10)
+npm test          # Jest — 86 tests across 6 files: erDiagramLogic, schemaService, paletteFilter, dslIntellisense, relationshipLinter, schemaDrift
 ```
 
 To run the extension inside VS Code for development/testing: open this
