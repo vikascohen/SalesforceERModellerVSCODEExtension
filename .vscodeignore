@@ -5,4 +5,11 @@ src/**/*.ts
 babel.config.js
 jest.config.js
 tsconfig.json
+esbuild.js
 **/*.map
+# node_modules is excluded entirely now that extension.ts and its
+# dependencies (exceljs included) are bundled into dist/extension.js by
+# esbuild.js — nothing in node_modules is needed at runtime anymore,
+# where before the entire folder (dev dependencies included) was being
+# packaged, ~16MB and 2000+ files for what's now a single ~1MB bundle.
+node_modules/**

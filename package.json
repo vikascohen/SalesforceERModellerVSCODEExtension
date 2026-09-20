@@ -9,7 +9,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "pretest": "npm run compile",
-    "package": "vsce package"
+    "bundle": "node esbuild.js",
+    "vscode:prepublish": "npm run compile && npm run bundle",
+    "package": "npm run vscode:prepublish && vsce package"
   },
   "license": "MIT",
   "devDependencies": {
@@ -20,6 +22,7 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^4.0.0",
     "babel-jest": "^30.5.1",
+    "esbuild": "^0.28.2",
     "jest": "^30.5.1",
     "jest-environment-jsdom": "^30.5.1",
     "typescript": "^7.0.2"

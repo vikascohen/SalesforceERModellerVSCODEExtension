@@ -260,9 +260,15 @@ Marketplace — package it into a `.vsix` file and install that:
 ```bash
 npm install -g @vscode/vsce   # one-time, packages extensions into .vsix files
 npm install
-npm run compile
-vsce package                  # produces sf-er-modeller-0.1.0.vsix in this folder
+npm run package               # type-checks, bundles, then packages the .vsix
 ```
+
+This produces `sf-er-modeller-0.1.0.vsix` in this folder. `npm run package`
+runs three steps in order: `tsc` type-checks (catching type errors without
+writing any files — see the note on bundling below for why), `esbuild.js`
+bundles `src/extension.ts` and everything it imports (`exceljs` included)
+into a single `dist/extension.js`, then `vsce package` builds the `.vsix`
+from that.
 
 Then either run `code --install-extension sf-er-modeller-0.1.0.vsix`,
 or in VS Code itself open the Extensions view, click the `...` menu in
@@ -271,8 +277,61 @@ your Extensions list like any other installed extension, persist across
 restarts, and its commands show up in the command palette without
 needing to press F5 first.
 
-This isn't published to the VS Code Marketplace — installing the
-`.vsix` directly is the only distribution method right now.
+**Why the extension host is bundled, not shipped as raw `node_modules`:**
+`vsce` has no reliable way to know which installed packages a `.vsix`
+actually needs at runtime versus which are just present — left alone, it
+packaged the entire `node_modules` folder, dev dependencies (`jest`,
+`babel`, `typescript`) included, ~16MB and 2000+ files for what's now a
+single, tree-shaken ~1MB bundle containing only the code actually
+reachable from `extension.ts`. The webview's own files
+(`main.js` and everything under `src/webview/`) are deliberately NOT
+bundled the same way — they're loaded directly as ES modules by the
+webview's `<script type="module">`, which is what makes the DSL editor,
+intellisense, and every canvas feature in this port work at all; bundling
+those into one file would need a different, browser-targeted esbuild
+config, not the extension-host one `esbuild.js` runs.
+
+**One security note stated honestly rather than silently fixed or
+ignored:** `npm audit` reports a moderate-severity issue in `uuid`, a
+transitive dependency of `exceljs` (a missing bounds check when a
+caller passes its own buffer, which `exceljs` doesn't do). The suggested
+fix would downgrade `exceljs` to an old, breaking version, so it was
+left as-is rather than "fixed" by introducing a real regression for a
+low-likelihood theoretical issue — worth knowing about, not worth
+breaking Excel export over.
+
+## Publishing to the VS Code Marketplace
+
+Not yet published — installing the `.vsix` directly has been the only
+distribution method so far. To actually publish it:
+
+1. **Create a publisher**, if `vikascohen` (the `publisher` field already
+   set in `package.json`) doesn't already exist as one: go to
+   [marketplace.visualstudio.com/manage](https://marketplace.visualstudio.com/manage),
+   sign in with a Microsoft account, and create it there. A publisher ID
+   is free and only needs to be created once, ever — every future
+   extension under this name reuses it.
+2. **Create a Personal Access Token (PAT)**: in
+   [Azure DevOps](https://dev.azure.com) (the Marketplace is built on
+   Azure DevOps infrastructure — a free organization there is enough,
+   no actual Azure DevOps project needed), go to Organization Settings >
+   Personal Access Tokens > New Token. Scope it to **Marketplace >
+   Manage** specifically, not full access, and give it an expiration
+   you're comfortable with — this token is the credential that actually
+   authorizes publishing, so treat it like a password.
+3. **Publish**:
+   ```bash
+   npx vsce publish -p <your-PAT>
+   ```
+   This runs `vscode:prepublish` automatically first (the same
+   type-check + bundle steps `npm run package` runs), then uploads the
+   result directly to the Marketplace under the `vikascohen` publisher.
+   No separate `vsce package` step needed first — `publish` does its own
+   packaging internally.
+
+Once published, updates are just `vsce publish patch` (or `minor` /
+`major`), which bumps the version in `package.json` and republishes in
+one step.
 
 ## License
 
