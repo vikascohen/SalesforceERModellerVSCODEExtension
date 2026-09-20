@@ -149,13 +149,27 @@ what's still missing — not everything from the original app is here yet.
   `scanForMissingRelationships` — separate from the DOM wiring around
   it, matching the same testing split used for DSL autocomplete and
   object-name filtering elsewhere in this port.
+- **Compare with Org / schema drift**: re-describes every entity
+  currently on canvas right now and compares it against what the DSL
+  actually says, showing fields that exist in the org but not the
+  diagram (Add / Add All) and fields in the diagram no longer in the org
+  (shown, not auto-removed — matching the original: a field that
+  disappeared from the org isn't necessarily something you want silently
+  dropped from your own notes about it). An entity that isn't a real or
+  accessible org object is skipped quietly rather than treated as "every
+  field is missing". The comparison itself is a pure, unit-tested
+  function (5 tests) ported directly from the LWC's own
+  `checkSchemaDrift`, including the exact fix already made once there:
+  a field's marker suffix (`[Type, Required]`) is computed while the
+  full field object is still in scope, so a field added this way lands
+  identical to one added via Import from Org or autocomplete, not a
+  bare, unmarked name.
 
 ## What's not built yet
 
 - **Drag-and-drop from a visual palette** — the object list now feeds a
   text-based autocomplete (above), but there's no separate visual
   palette panel to drag entities from directly onto the canvas yet.
-- **Schema drift comparison** doesn't exist yet.
 - **Multi-file tabs** — each `Salesforce ER Modeller: Open` opens a
   single panel; there's no tab strip for working on several diagrams at
   once yet.

@@ -7,6 +7,7 @@ import { currentSearchTerm, filterObjectNames, appendNameToInput } from './palet
 import { detectDslContext } from './dslIntellisense.js';
 import { buildFieldMarkerSuffix } from './fieldMarkers.js';
 import { scanForMissingRelationships } from './relationshipLinter.js';
+import { computeSchemaDrift } from './schemaDrift.js';
 
 const vscode = acquireVsCodeApi();
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -35,6 +36,11 @@ const linterTitle = document.getElementById('linterTitle');
 const linterList = document.getElementById('linterList');
 const linterAddAllBtn = document.getElementById('linterAddAllBtn');
 const linterDismissBtn = document.getElementById('linterDismissBtn');
+const compareOrgBtn = document.getElementById('compareOrgBtn');
+const driftModal = document.getElementById('driftModal');
+const driftTitle = document.getElementById('driftTitle');
+const driftBody = document.getElementById('driftBody');
+const driftCloseBtn = document.getElementById('driftCloseBtn');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -74,6 +80,8 @@ let sharingSignals = {};
 let missingRelationshipSuggestions = [];
 let dismissedSuggestionKeys = new Set();
 let relScanTimer = null;
+
+let driftResults = [];
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -138,6 +146,8 @@ async function init() {
     sharingViewToggle.addEventListener('change', () => { requestSharingAndHeatmapData(); scheduleRender(); });
     linterAddAllBtn.addEventListener('click', handleAddAllSuggestions);
     linterDismissBtn.addEventListener('click', handleDismissSuggestions);
+    compareOrgBtn.addEventListener('click', openDriftCheck);
+    driftCloseBtn.addEventListener('click', closeDriftModal);
     saveBtn.addEventListener('click', doSave);
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
     exportMermaidBtn.addEventListener('click', doExportMermaid);
@@ -637,6 +647,128 @@ function handleDismissSuggestions() {
     renderLinterPanel();
 }
 
+// ── Compare with Org / schema drift ──
+// Direct port of the LWC's handleOpenDriftCheck/checkSchemaDrift.
+
+function openDriftCheck() {
+    driftModal.hidden = false;
+    driftTitle.textContent = 'Comparing with org\u2026';
+    driftBody.innerHTML = '';
+    driftResults = [];
+    runSchemaDriftCheck();
+}
+
+function closeDriftModal() {
+    driftModal.hidden = true;
+}
+
+function runSchemaDriftCheck() {
+    let model;
+    try {
+        model = parseEr(editor.value);
+    } catch (e) {
+        driftModal.hidden = true;
+        setStatus(e.message || String(e), true);
+        return;
+    }
+    const names = model.entities.map((e) => e.name);
+    if (!names.length) {
+        driftTitle.textContent = 'Nothing on the canvas to compare';
+        return;
+    }
+    vscode.postMessage({ type: 'requestSchemaDrift', entityNames: names });
+}
+
+function renderDriftModal() {
+    if (!driftResults.length) {
+        driftTitle.textContent = 'No drift found \u2014 everything matches the org';
+        driftBody.innerHTML = '';
+        return;
+    }
+    driftTitle.textContent = `Schema drift found in ${driftResults.length} entit${driftResults.length === 1 ? 'y' : 'ies'}`;
+    driftBody.innerHTML = '';
+    driftResults.forEach((result) => {
+        const block = document.createElement('div');
+        block.className = 'drift-entity-block';
+        const name = document.createElement('div');
+        name.className = 'drift-entity-name';
+        name.textContent = result.entityName;
+        block.appendChild(name);
+
+        if (result.newFields.length) {
+            const addAllRow = document.createElement('div');
+            addAllRow.className = 'drift-field-row';
+            const addAllBtn = document.createElement('button');
+            addAllBtn.textContent = `Add All ${result.newFields.length} New Field${result.newFields.length === 1 ? '' : 's'}`;
+            addAllBtn.addEventListener('click', () => addAllDriftFields(result.entityName));
+            addAllRow.appendChild(addAllBtn);
+            block.appendChild(addAllRow);
+
+            result.newFields.forEach((f) => {
+                const row = document.createElement('div');
+                row.className = 'drift-field-row';
+                const label = document.createElement('span');
+                label.className = 'drift-new-label';
+                label.style.flex = '1';
+                label.textContent = '+ ' + f.name + ' (in org, not in diagram)';
+                const addBtn = document.createElement('button');
+                addBtn.textContent = 'Add';
+                addBtn.addEventListener('click', () => addDriftField(result.entityName, f.name, f.markerSuffix));
+                row.appendChild(label);
+                row.appendChild(addBtn);
+                block.appendChild(row);
+            });
+        }
+
+        result.missingFields.forEach((f) => {
+            const row = document.createElement('div');
+            row.className = 'drift-field-row';
+            const label = document.createElement('span');
+            label.className = 'drift-missing-label';
+            label.textContent = '\u2013 ' + f.name + ' (in diagram, no longer in org)';
+            row.appendChild(label);
+            block.appendChild(row);
+        });
+
+        driftBody.appendChild(block);
+    });
+}
+
+function addFieldToEntityLine(entityName, fieldName, markerSuffix) {
+    const lines = editor.value.split('\n');
+    const re = new RegExp('^(\\s*entity\\s+' + entityName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:\\s*)(.*)$', 'i');
+    for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(re);
+        if (m) {
+            const fieldsPortion = m[2].replace(/\s+$/, '');
+            const sep = fieldsPortion ? ', ' : '';
+            lines[i] = m[1] + fieldsPortion + sep + fieldName + markerSuffix;
+            break;
+        }
+    }
+    editor.value = lines.join('\n');
+    markDirty();
+    scheduleRender();
+}
+
+function addDriftField(entityName, fieldName, markerSuffix) {
+    addFieldToEntityLine(entityName, fieldName, markerSuffix);
+    driftResults = driftResults
+        .map((r) => (r.entityName === entityName ? { ...r, newFields: r.newFields.filter((f) => f.name !== fieldName) } : r))
+        .filter((r) => r.newFields.length || r.missingFields.length);
+    renderDriftModal();
+}
+
+function addAllDriftFields(entityName) {
+    const result = driftResults.find((r) => r.entityName === entityName);
+    if (!result) return;
+    result.newFields.forEach((f) => addFieldToEntityLine(entityName, f.name, f.markerSuffix));
+    driftResults = driftResults
+        .map((r) => (r.entityName === entityName ? { ...r, newFields: [] } : r))
+        .filter((r) => r.newFields.length || r.missingFields.length);
+    renderDriftModal();
+}
+
 function doImport() {
     const raw = importNames.value.trim();
     if (!raw) { setStatus('Enter one or more object API names first.', true); return; }
@@ -916,6 +1048,15 @@ function handleExtensionMessage(event) {
         Object.keys(msg.signals || {}).forEach((name) => {
             sharingSignals[name.toLowerCase()] = msg.signals[name];
         });
+    } else if (msg.type === 'schemaDriftData') {
+        let model;
+        try {
+            model = parseEr(editor.value);
+        } catch (e) {
+            return;
+        }
+        driftResults = computeSchemaDrift(model, msg.freshByEntityName || {}, buildFieldMarkerSuffix);
+        renderDriftModal();
     }
 }
 

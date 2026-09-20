@@ -314,3 +314,64 @@ html, body {
     font-size: 11px;
     padding: 1px 6px;
 }
+
+/* ── Compare with Org / schema drift ── */
+.drift-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+}
+
+.drift-modal-inner {
+    width: 560px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+}
+
+.drift-modal-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    font-weight: 600;
+}
+
+#driftTitle { flex: 1; }
+
+.drift-modal-body {
+    overflow-y: auto;
+    padding: 8px 12px;
+}
+
+.drift-entity-block {
+    margin-bottom: 14px;
+}
+
+.drift-entity-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.drift-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 12px;
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.drift-field-row button {
+    font-size: 11px;
+    padding: 1px 6px;
+}
+
+.drift-new-label { color: #1a7f37; }
+.drift-missing-label { color: #d68910; }

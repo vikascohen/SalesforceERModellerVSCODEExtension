@@ -30,6 +30,8 @@
         <button id="dictionaryToggleBtn" title="Browse field descriptions, last-modified dates, and on-demand usage percentages">Data Dictionary</button>
         <label class="toggle"><input type="checkbox" id="heatmapToggle"> Heatmap</label>
         <label class="toggle"><input type="checkbox" id="sharingViewToggle"> Sharing View</label>
+        <span class="sep"></span>
+        <button id="compareOrgBtn" title="Compare the DSL against the current org schema for every entity on canvas">Compare with Org</button>
         <span class="status" id="statusText"></span>
     </div>
     <div class="main">
@@ -64,6 +66,16 @@
                 <button id="dictionaryCloseBtn" title="Close Data Dictionary">\u2715</button>
             </div>
             <div id="dictionaryTableWrap" class="dictionary-table-wrap"></div>
+        </div>
+    </div>
+
+    <div id="driftModal" class="drift-modal" hidden>
+        <div class="drift-modal-inner">
+            <div class="drift-modal-header">
+                <span id="driftTitle">Comparing with org\u2026</span>
+                <button id="driftCloseBtn" title="Close">\u2715</button>
+            </div>
+            <div id="driftBody" class="drift-modal-body"></div>
         </div>
     </div>
 

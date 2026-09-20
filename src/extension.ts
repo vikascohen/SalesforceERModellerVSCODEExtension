@@ -195,6 +195,9 @@ class ErModellerPanel {
             case 'requestSharingSignals':
                 await this.handleRequestSharingSignals(msg.entityNames as string[]);
                 return;
+            case 'requestSchemaDrift':
+                await this.handleRequestSchemaDrift(msg.entityNames as string[]);
+                return;
             case 'dirtyChanged':
                 this.isDirty = !!msg.dirty;
                 this.updateTitle();
@@ -402,6 +405,27 @@ class ErModellerPanel {
         } catch (e) {
             this.panel.webview.postMessage({ type: 'sharingSignals', signals: {} });
         }
+    }
+
+    private async handleRequestSchemaDrift(entityNames: string[]): Promise<void> {
+        // Reuses the exact same describeObject + classifyDescribe
+        // pipeline as Import from Org and DSL intellisense, since schema
+        // drift needs the same fresh field data (type, required,
+        // relationship info) those already fetch — one round trip per
+        // entity, each wrapped so one inaccessible/renamed object doesn't
+        // fail the whole comparison.
+        const freshByEntityName: Record<string, any[]> = {};
+        for (const name of entityNames) {
+            try {
+                const raw = await describeObject(name);
+                const classified = classifyDescribe(raw);
+                freshByEntityName[name.toLowerCase()] = classified.fields;
+            } catch (e) {
+                // Not a real/accessible org object — nothing to compare
+                // for this one, handled by the caller as "skip quietly".
+            }
+        }
+        this.panel.webview.postMessage({ type: 'schemaDriftData', freshByEntityName });
     }
 
     private async handleExportDictionaryToExcel(row: any): Promise<void> {
