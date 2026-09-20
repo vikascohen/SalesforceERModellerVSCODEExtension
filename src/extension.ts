@@ -10,6 +10,8 @@ import {
     getFieldDescriptions,
     getRecordCount,
     getFieldUsageStats,
+    getSharingModels,
+    getRecordCounts,
     SfCliError
 } from './sfCli';
 import { classifyDescribe, buildErSource, ClassifiedObject } from './schemaService';
@@ -182,6 +184,12 @@ class ErModellerPanel {
                 return;
             case 'exportDictionaryToExcel':
                 await this.handleExportDictionaryToExcel(msg.row);
+                return;
+            case 'requestSharingModels':
+                await this.handleRequestSharingModels(msg.entityNames as string[]);
+                return;
+            case 'requestRecordCounts':
+                await this.handleRequestRecordCounts(msg.entityNames as string[]);
                 return;
             case 'dirtyChanged':
                 this.isDirty = !!msg.dirty;
@@ -363,6 +371,24 @@ class ErModellerPanel {
         this.isDirty = false;
         this.updateTitle();
         this.panel.webview.postMessage({ type: 'loadDsl', dsl: Buffer.from(bytes).toString('utf8') });
+    }
+
+    private async handleRequestSharingModels(entityNames: string[]): Promise<void> {
+        try {
+            const models = await getSharingModels(entityNames);
+            this.panel.webview.postMessage({ type: 'sharingModels', models });
+        } catch (e) {
+            this.panel.webview.postMessage({ type: 'sharingModels', models: {} });
+        }
+    }
+
+    private async handleRequestRecordCounts(entityNames: string[]): Promise<void> {
+        try {
+            const counts = await getRecordCounts(entityNames);
+            this.panel.webview.postMessage({ type: 'recordCounts', counts });
+        } catch (e) {
+            this.panel.webview.postMessage({ type: 'recordCounts', counts: {} });
+        }
     }
 
     private async handleExportDictionaryToExcel(row: any): Promise<void> {

@@ -277,6 +277,79 @@ export async function getFieldUsageStats(objectApiName: string, fieldApiNames: s
     return { percentages, totalRecords };
 }
 
+export interface SharingModelInfo {
+    internalModel: string | null;
+    externalModel: string | null;
+}
+
+/**
+ * Direct port of SchemaMetadataController.cls's getSharingModels() —
+ * each object's org-wide default sharing model, both internal (regular
+ * org users) and external (Experience Cloud / guest users, null on orgs
+ * without that license), sourced from EntityDefinition. One query per
+ * object, each wrapped so a single unresolvable name can't fail the
+ * whole batch, matching the Apex version's own reasoning: EntityDefinition
+ * is a metadata catalog object with its own SOQL restrictions (no
+ * IN/OR/NOT/LIMIT), so this can't be done as one batched query the way
+ * getRecordCounts below can.
+ */
+export async function getSharingModels(objectApiNames: string[]): Promise<Record<string, SharingModelInfo>> {
+    const result: Record<string, SharingModelInfo> = {};
+    for (const rawName of objectApiNames) {
+        const name = (rawName || '').trim();
+        if (!name) continue;
+        try {
+            const soql = `SELECT InternalSharingModel, ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName = '${name}'`;
+            const rows = await runSoqlQuery(soql, true);
+            const row = rows[0];
+            if (row && (row.InternalSharingModel != null || row.ExternalSharingModel != null)) {
+                result[name] = {
+                    internalModel: row.InternalSharingModel || null,
+                    externalModel: row.ExternalSharingModel || null
+                };
+            }
+        } catch (e) {
+            // Skip this one object's badge, don't fail the batch.
+        }
+    }
+    return result;
+}
+
+export interface RecordCountInfo {
+    count: number;
+    lastModifiedDate: string | null;
+}
+
+/**
+ * Direct port of SchemaMetadataController.cls's getRecordCounts() — count
+ * and freshness (most recent LastModifiedDate) per object, for the
+ * canvas Heatmap's stale-vs-active-vs-empty coloring. One aggregate
+ * query per object (COUNT(Id) and MAX(LastModifiedDate) together, not
+ * two separate round trips), each wrapped so a single object failing
+ * doesn't blank out the rest.
+ */
+export async function getRecordCounts(objectApiNames: string[]): Promise<Record<string, RecordCountInfo>> {
+    const result: Record<string, RecordCountInfo> = {};
+    for (const rawName of objectApiNames) {
+        const name = (rawName || '').trim();
+        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) continue;
+        try {
+            const soql = `SELECT COUNT(Id) cnt, MAX(LastModifiedDate) lastMod FROM ${name}`;
+            const rows = await runSoqlQuery(soql, false);
+            const row = rows[0];
+            if (row) {
+                result[name] = {
+                    count: typeof row.cnt === 'number' ? row.cnt : 0,
+                    lastModifiedDate: row.lastMod || null
+                };
+            }
+        } catch (e) {
+            // Skip this one object's count, don't fail the batch.
+        }
+    }
+    return result;
+}
+
 export async function runSoqlQuery(soql: string, useToolingApi: boolean): Promise<any[]> {
     const args = ['data', 'query', '--query', soql, '--json'];
     if (useToolingApi) args.push('--use-tooling-api');

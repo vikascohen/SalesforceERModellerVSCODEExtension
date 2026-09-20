@@ -26,6 +26,8 @@ const dictionaryUsageBtn = document.getElementById('dictionaryUsageBtn');
 const dictionaryExportBtn = document.getElementById('dictionaryExportBtn');
 const dictionaryCloseBtn = document.getElementById('dictionaryCloseBtn');
 const dictionaryTableWrap = document.getElementById('dictionaryTableWrap');
+const heatmapToggle = document.getElementById('heatmapToggle');
+const sharingViewToggle = document.getElementById('sharingViewToggle');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -55,6 +57,10 @@ let charWidthCache = {};
 let dictionarySelectedObject = null;
 let dictionaryRow = null; // { apiName, label, isCustom, fields: [...] }
 let dictionaryUsagePending = false;
+
+// Sharing View / Heatmap state — lowercased entity name -> data
+let sharingModels = {};
+let recordCounts = {};
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -115,6 +121,8 @@ async function init() {
     dictionarySearch.addEventListener('input', renderDictionaryObjectList);
     dictionaryUsageBtn.addEventListener('click', requestCalculateUsage);
     dictionaryExportBtn.addEventListener('click', exportDictionaryToExcel);
+    heatmapToggle.addEventListener('change', () => { requestSharingAndHeatmapData(); scheduleRender(); });
+    sharingViewToggle.addEventListener('change', () => { requestSharingAndHeatmapData(); scheduleRender(); });
     saveBtn.addEventListener('click', doSave);
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
     exportMermaidBtn.addEventListener('click', doExportMermaid);
@@ -423,6 +431,41 @@ function exportDictionaryToExcel() {
     vscode.postMessage({ type: 'exportDictionaryToExcel', row: dictionaryRow });
 }
 
+// ── Sharing View / Heatmap ──
+// Color logic ported directly from the LWC's own heatColorFor/
+// isStaleRecordInfo — three states, not a binary "any records or not":
+// empty (no records), stale (records exist, none touched in over a
+// year), active (touched within the last year).
+
+function isStaleRecordInfo(rc) {
+    if (!rc || !rc.count || !rc.lastModifiedDate) return false;
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    return new Date(rc.lastModifiedDate) < oneYearAgo;
+}
+
+function heatColorFor(rc) {
+    if (!rc || !rc.count) return '#fde3cc';         // empty
+    if (isStaleRecordInfo(rc)) return '#fef3c7';     // stale
+    return '#cfe8fb';                                 // active
+}
+
+function currentEntityNames() {
+    if (!lastModel || !lastModel.entities) return [];
+    return lastModel.entities.map((e) => e.name);
+}
+
+function requestSharingAndHeatmapData() {
+    const names = currentEntityNames();
+    if (!names.length) return;
+    if (sharingViewToggle.checked) {
+        vscode.postMessage({ type: 'requestSharingModels', entityNames: names });
+    }
+    if (heatmapToggle.checked) {
+        vscode.postMessage({ type: 'requestRecordCounts', entityNames: names });
+    }
+}
+
 function doImport() {
     const raw = importNames.value.trim();
     if (!raw) { setStatus('Enter one or more object API names first.', true); return; }
@@ -462,6 +505,7 @@ function render() {
         lastModel = model;
         const geo = buildErGeometry(model, {}, {}, {});
         drawGeometry(geo);
+        requestSharingAndHeatmapData();
         setStatus('');
     } catch (e) {
         setStatus(e.message || String(e), true);
@@ -531,7 +575,12 @@ function drawGeometry(geo) {
         rect.setAttribute('y', String(b.y));
         rect.setAttribute('width', String(b.width));
         rect.setAttribute('height', String(b.height));
-        rect.setAttribute('fill', 'var(--vscode-editor-background)');
+        let bodyFill = 'var(--vscode-editor-background)';
+        if (heatmapToggle.checked) {
+            const rc = recordCounts[b.name.toLowerCase()];
+            if (rc != null) bodyFill = heatColorFor(rc);
+        }
+        rect.setAttribute('fill', bodyFill);
         rect.setAttribute('stroke', 'var(--vscode-panel-border)');
         g.appendChild(rect);
 
@@ -543,6 +592,32 @@ function drawGeometry(geo) {
         header.setAttribute('height', String(headerHeight));
         header.setAttribute('fill', b.headerFill);
         g.appendChild(header);
+
+        if (sharingViewToggle.checked) {
+            const sm = sharingModels[b.name.toLowerCase()];
+            if (sm && sm.internalModel) {
+                const badge = document.createElementNS(SVG_NS, 'text');
+                badge.setAttribute('x', String(b.x + b.width - 6));
+                badge.setAttribute('y', String(b.y - 6));
+                badge.setAttribute('text-anchor', 'end');
+                badge.setAttribute('font-size', '9');
+                badge.setAttribute('fill', 'var(--vscode-descriptionForeground)');
+                badge.textContent = sm.internalModel + (sm.externalModel ? ' / ' + sm.externalModel : '');
+                g.appendChild(badge);
+            }
+        }
+        if (heatmapToggle.checked) {
+            const rc = recordCounts[b.name.toLowerCase()];
+            if (rc != null) {
+                const badge = document.createElementNS(SVG_NS, 'text');
+                badge.setAttribute('x', String(b.x + 6));
+                badge.setAttribute('y', String(b.y - 6));
+                badge.setAttribute('font-size', '9');
+                badge.setAttribute('fill', 'var(--vscode-descriptionForeground)');
+                badge.textContent = rc.count.toLocaleString() + ' records';
+                g.appendChild(badge);
+            }
+        }
 
         const title = document.createElementNS(SVG_NS, 'text');
         title.setAttribute('x', String(b.x + 8));
@@ -640,6 +715,18 @@ function handleExtensionMessage(event) {
             renderDictionaryTable();
             if (msg.stats && msg.stats.error) setStatus(msg.stats.error, true);
         }
+    } else if (msg.type === 'sharingModels') {
+        sharingModels = {};
+        Object.keys(msg.models || {}).forEach((name) => {
+            sharingModels[name.toLowerCase()] = msg.models[name];
+        });
+        scheduleRender();
+    } else if (msg.type === 'recordCounts') {
+        recordCounts = {};
+        Object.keys(msg.counts || {}).forEach((name) => {
+            recordCounts[name.toLowerCase()] = msg.counts[name];
+        });
+        scheduleRender();
     }
 }
 

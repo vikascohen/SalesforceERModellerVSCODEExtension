@@ -115,26 +115,21 @@ what's still missing — not everything from the original app is here yet.
   does; it's a faithful, line-by-line port of already-proven Apex logic,
   which is why this was accepted as a stated gap rather than blocking on
   building that mocking infrastructure.
+- **Sharing View / Heatmap toggles**: two checkboxes in the toolbar,
+  direct ports of `getSharingModels()` and `getRecordCounts()` from
+  `SchemaMetadataController.cls`. Sharing View badges each box with its
+  org-wide default (internal / external), sourced from
+  `EntityDefinition` via the Tooling API. Heatmap colors each box by
+  activity, the same three states as the original app, not just a
+  binary "has records or not": empty (orange), stale (amber, records
+  exist but none touched in over a year), active (blue, touched within
+  the last year) — computed from one aggregate query per object
+  (`COUNT(Id)` and `MAX(LastModifiedDate)` together). Data refreshes
+  automatically as entities are added to the DSL while a toggle is
+  already on.
 
 ## What's not built yet
 
-- **Sharing View, Heatmap** — both need aggregate SOQL queries via
-  `sf data query`. Not started yet.
-- **Data Dictionary**: a new button opens a full-screen panel — a
-  searchable object list on the left, and on the right, the selected
-  object's fields with label, type, required, description and
-  last-modified date (from `FieldDefinition` via the Tooling API, the
-  same source the original Apex version reads), and an on-demand
-  "Calculate Usage" button. Usage is never computed automatically,
-  since it scans actual record data: a direct port of the original's
-  batched-aggregate-query approach (`COUNT(field1), COUNT(field2), ...`
-  in groups of 15, not one query per field), so a handful of fields
-  share one query rather than needing dozens of round trips, with a
-  failing batch falling back to "not available" for just its own fields
-  rather than the whole object. Exports to a real `.xlsx` file via
-  `exceljs`, generated on the extension host side (not the webview,
-  which can't run a Node.js-oriented library like this directly) and
-  saved through the standard VS Code save dialog.
 - **Drag-and-drop from a visual palette** — the object list now feeds a
   text-based autocomplete (above), but there's no separate visual
   palette panel to drag entities from directly onto the canvas yet.
