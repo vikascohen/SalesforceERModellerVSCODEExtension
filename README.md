@@ -127,14 +127,23 @@ what's still missing — not everything from the original app is here yet.
   (`COUNT(Id)` and `MAX(LastModifiedDate)` together). Data refreshes
   automatically as entities are added to the DSL while a toggle is
   already on.
+- **Object summary hover card**: hover any entity on the canvas (no
+  toggle needed) for field count, standard/custom status, plus whatever
+  the two toggles above have already fetched — record count with the
+  same stale/active wording Heatmap's color encodes, and internal/
+  external sharing. One deliberate, stated scope reduction from the
+  original: the Sharing Rules / Apex Sharing detection section (a third
+  Apex method, `getSharingSignals()`, reading `__Share` table `RowCause`
+  values) isn't ported yet — this is a stated gap, not an oversight.
 
 ## What's not built yet
 
 - **Drag-and-drop from a visual palette** — the object list now feeds a
   text-based autocomplete (above), but there's no separate visual
   palette panel to drag entities from directly onto the canvas yet.
-- **The object summary hover card, the smart relationship linter, schema
-  drift comparison** — none of these exist yet.
+- **The smart relationship linter, schema drift comparison, and Sharing
+  Rules / Apex Sharing detection on the hover card** — none of these
+  exist yet.
 - **Multi-file tabs** — each `Salesforce ER Modeller: Open` opens a
   single panel; there's no tab strip for working on several diagrams at
   once yet.

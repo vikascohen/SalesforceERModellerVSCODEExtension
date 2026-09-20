@@ -28,6 +28,7 @@ const dictionaryCloseBtn = document.getElementById('dictionaryCloseBtn');
 const dictionaryTableWrap = document.getElementById('dictionaryTableWrap');
 const heatmapToggle = document.getElementById('heatmapToggle');
 const sharingViewToggle = document.getElementById('sharingViewToggle');
+const hoverCard = document.getElementById('hoverCard');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -466,6 +467,72 @@ function requestSharingAndHeatmapData() {
     }
 }
 
+// ── Object summary hover card ──
+// Ported from the LWC's own sharingBadgeFor/showHoverCard. One
+// deliberate, stated scope reduction from the original: the Sharing
+// Rules / Apex Sharing detection (a third Apex method, getSharingSignals,
+// reading __Share table RowCause values) isn't ported yet, so this
+// shows field count, object type, record count/freshness, and sharing
+// model, but not that third section — see README for this as a stated
+// gap, not an oversight.
+
+function sharingBadgeFor(model) {
+    const map = {
+        Private: 'Private',
+        Read: 'Public Read Only',
+        ReadWrite: 'Public Read/Write',
+        ReadWriteTransfer: 'Public Read/Write/Transfer',
+        FullAccess: 'Full Access',
+        ControlledByParent: 'Controlled by Parent (inherits sharing)',
+        ControlledByCampaign: 'Controlled by Campaign',
+        ControlledByLeadOrContact: 'Controlled by Lead/Contact'
+    };
+    return map[model] || (model ? model : 'Unknown / not available');
+}
+
+function isStaleRecordInfoForHover(rc) {
+    return isStaleRecordInfo(rc);
+}
+
+function showHoverCard(entityName, box, clientX, clientY) {
+    const key = entityName.toLowerCase();
+    const rc = recordCounts[key];
+    const sharing = sharingModels[key];
+
+    const fieldCount = box.fields.length + (box.hiddenCount || 0);
+    const objectTypeText = entityName.endsWith('__c') ? 'Custom Object' : 'Standard Object';
+
+    let html = `<div class="hover-card-title">${escapeHtml(entityName)}</div>`;
+    html += `<div class="hover-card-sub">${objectTypeText} &middot; ${fieldCount} fields</div>`;
+
+    if (heatmapToggle.checked) {
+        html += '<div class="hover-card-row"><span class="hover-card-label">Records</span><span>' +
+            (rc != null ? rc.count.toLocaleString() : 'Unavailable') + '</span></div>';
+        if (rc != null && rc.lastModifiedDate) {
+            const stale = isStaleRecordInfoForHover(rc);
+            const dateText = new Date(rc.lastModifiedDate).toLocaleDateString();
+            html += '<div class="hover-card-row"><span></span><span>' +
+                (stale ? 'Stale &mdash; ' : '') + 'Last touched ' + dateText + '</span></div>';
+        }
+    }
+
+    if (sharingViewToggle.checked) {
+        html += '<div class="hover-card-row"><span class="hover-card-label">Internal Sharing</span><span>' +
+            (sharing && sharing.internalModel ? escapeHtml(sharingBadgeFor(sharing.internalModel)) : 'Unknown') + '</span></div>';
+        html += '<div class="hover-card-row"><span class="hover-card-label">External Sharing</span><span>' +
+            (sharing && sharing.externalModel ? escapeHtml(sharingBadgeFor(sharing.externalModel)) : 'None configured') + '</span></div>';
+    }
+
+    hoverCard.innerHTML = html;
+    hoverCard.style.left = (clientX + 12) + 'px';
+    hoverCard.style.top = (clientY + 12) + 'px';
+    hoverCard.hidden = false;
+}
+
+function hideHoverCard() {
+    hoverCard.hidden = true;
+}
+
 function doImport() {
     const raw = importNames.value.trim();
     if (!raw) { setStatus('Enter one or more object API names first.', true); return; }
@@ -569,6 +636,18 @@ function drawGeometry(geo) {
         g.setAttribute('data-entity', b.name);
         g.setAttribute('opacity', dimmed ? '0.2' : '1');
         g.style.cursor = focusToggle.checked ? 'pointer' : 'default';
+
+        let hoverTimer = null;
+        g.addEventListener('mouseenter', (e) => {
+            const clientX = e.clientX;
+            const clientY = e.clientY;
+            clearTimeout(hoverTimer);
+            hoverTimer = setTimeout(() => showHoverCard(b.name, b, clientX, clientY), 350);
+        });
+        g.addEventListener('mouseleave', () => {
+            clearTimeout(hoverTimer);
+            hideHoverCard();
+        });
 
         const rect = document.createElementNS(SVG_NS, 'rect');
         rect.setAttribute('x', String(b.x));

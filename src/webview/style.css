@@ -130,6 +130,41 @@ html, body {
 .canvas-wrap {
     flex: 1;
     overflow: auto;
+    position: relative;
+}
+
+.hover-card {
+    position: absolute;
+    z-index: 30;
+    background: var(--vscode-editorHoverWidget-background, var(--vscode-editor-background));
+    border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-panel-border));
+    padding: 8px 10px;
+    font-size: 12px;
+    min-width: 200px;
+    max-width: 280px;
+    pointer-events: none;
+}
+
+.hover-card-title {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.hover-card-sub {
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+
+.hover-card-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.hover-card-label {
+    color: var(--vscode-descriptionForeground);
 }
 
 #canvas {
