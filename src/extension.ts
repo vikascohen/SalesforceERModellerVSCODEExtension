@@ -167,6 +167,9 @@ class ErModellerPanel {
             case 'requestObjectList':
                 await this.handleRequestObjectList();
                 return;
+            case 'requestFieldsForEntity':
+                await this.handleRequestFieldsForEntity(msg.entityName as string);
+                return;
             case 'dirtyChanged':
                 this.isDirty = !!msg.dirty;
                 this.updateTitle();
@@ -226,6 +229,29 @@ class ErModellerPanel {
             this.panel.webview.postMessage({ type: 'objectList', names });
         } catch (e) {
             this.panel.webview.postMessage({ type: 'importError', message: errorMessage(e) });
+        }
+    }
+
+    private async handleRequestFieldsForEntity(entityName: string): Promise<void> {
+        // Backs the DSL editor's own intellisense — a different message
+        // from importFromOrg above (which appends whole entities to the
+        // DSL text), but reuses the exact same describeObject +
+        // classifyDescribe pipeline, since intellisense needs the same
+        // field data (type, required, relationship info) that import does.
+        try {
+            const raw = await describeObject(entityName);
+            const classified = classifyDescribe(raw);
+            this.panel.webview.postMessage({
+                type: 'entityFields',
+                entityName,
+                fields: classified.fields
+            });
+        } catch (e) {
+            // Intellisense failing quietly for one entity (typo'd object
+            // name, no org selected, etc.) shouldn't interrupt typing with
+            // an error banner the way a real Import from Org failure
+            // should — just report back an empty field list.
+            this.panel.webview.postMessage({ type: 'entityFields', entityName, fields: [] });
         }
     }
 

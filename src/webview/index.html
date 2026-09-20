@@ -29,7 +29,10 @@
         <span class="status" id="statusText"></span>
     </div>
     <div class="main">
-        <textarea id="dslEditor" spellcheck="false" placeholder="entity Account : Name, Industry&#10;entity Contact : LastName&#10;Contact.AccountId -&gt; Account"></textarea>
+        <div class="dsl-editor-wrap">
+            <textarea id="dslEditor" spellcheck="false" placeholder="entity Account : Name, Industry&#10;entity Contact : LastName&#10;Contact.AccountId -&gt; Account"></textarea>
+            <div id="dslSuggestDropdown" class="suggest-dropdown" hidden></div>
+        </div>
         <div class="canvas-wrap">
             <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>

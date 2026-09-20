@@ -4,6 +4,8 @@
 // Salesforce CLI access, neither of which a webview can do itself.
 
 import { currentSearchTerm, filterObjectNames, appendNameToInput } from './paletteFilter.js';
+import { detectDslContext } from './dslIntellisense.js';
+import { buildFieldMarkerSuffix } from './fieldMarkers.js';
 
 const vscode = acquireVsCodeApi();
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -14,6 +16,7 @@ const statusText = document.getElementById('statusText');
 const importBtn = document.getElementById('importBtn');
 const importNames = document.getElementById('importNames');
 const suggestDropdown = document.getElementById('suggestDropdown');
+const dslSuggestDropdown = document.getElementById('dslSuggestDropdown');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
@@ -21,12 +24,23 @@ const exportMermaidBtn = document.getElementById('exportMermaidBtn');
 const exportDrawioBtn = document.getElementById('exportDrawioBtn');
 const focusToggle = document.getElementById('focusToggle');
 
-let parseEr, buildErGeometry, buildMermaidErDiagram, buildDrawioXml;
+let parseEr, buildErGeometry, buildMermaidErDiagram, buildDrawioXml, splitFieldList;
 let renderTimer = null;
 let lastModel = null;
 let dirty = false;
 let focusedEntity = null;
 let allObjectNames = [];
+
+// DSL editor intellisense state — separate from the import-panel's own
+// object-name autocomplete (suggestDropdown/allObjectNames above, which
+// this reuses for context 2's object-name suggestions rather than
+// duplicating that fetch).
+let objectFieldsCache = {};   // lowercased entity name -> field[]
+let objectFieldsFetching = {}; // lowercased entity name -> true while a request is in flight
+let dslSuggestItems = [];
+let dslReplaceStart = 0;
+let dslReplaceEnd = 0;
+let charWidthCache = {};
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -58,8 +72,17 @@ async function init() {
     buildErGeometry = logic.buildErGeometry;
     buildMermaidErDiagram = logic.buildMermaidErDiagram;
     buildDrawioXml = logic.buildDrawioXml;
+    splitFieldList = logic.splitFieldList;
 
-    editor.addEventListener('input', () => { markDirty(); scheduleRender(); });
+    editor.addEventListener('input', () => { markDirty(); scheduleRender(); updateDslSuggestions(); });
+    editor.addEventListener('click', () => updateDslSuggestions());
+    editor.addEventListener('keydown', handleDslEditorKeyDown);
+    editor.addEventListener('scroll', () => { dslSuggestDropdown.hidden = true; });
+    document.addEventListener('click', (e) => {
+        if (e.target !== editor && !dslSuggestDropdown.contains(e.target)) {
+            dslSuggestDropdown.hidden = true;
+        }
+    });
     importBtn.addEventListener('click', doImport);
     importNames.addEventListener('keydown', (e) => { if (e.key === 'Enter') doImport(); });
     importNames.addEventListener('input', renderSuggestions);
@@ -123,6 +146,166 @@ function renderSuggestions() {
         suggestDropdown.appendChild(item);
     });
     suggestDropdown.hidden = false;
+}
+
+// ── DSL editor intellisense ──
+// Ported from the LWC's own detectDslContext/computeDslSuggestStyle —
+// see dslIntellisense.js for the two real bugs already found and fixed
+// there, preserved intact in this port rather than re-derived.
+
+function requestFieldsForEntity(entityName) {
+    const key = entityName.toLowerCase();
+    if (objectFieldsCache[key] || objectFieldsFetching[key]) return;
+    objectFieldsFetching[key] = true;
+    vscode.postMessage({ type: 'requestFieldsForEntity', entityName });
+}
+
+function updateDslSuggestions() {
+    const caret = editor.selectionStart;
+    const text = editor.value;
+    const lineStart = text.lastIndexOf('\n', caret - 1) + 1;
+    const linePrefix = text.substring(lineStart, caret);
+
+    const ctx = detectDslContext(linePrefix, text, lineStart, {
+        allObjectNames,
+        getCachedFields: (entityLower) => objectFieldsCache[entityLower],
+        requestFieldsIfMissing: requestFieldsForEntity,
+        buildFieldMarkerSuffix,
+        splitFieldList
+    });
+
+    if (!ctx || !ctx.items || !ctx.items.length) {
+        dslSuggestDropdown.hidden = true;
+        dslSuggestItems = [];
+        return;
+    }
+    dslSuggestItems = ctx.items;
+    dslReplaceStart = ctx.replaceStart;
+    dslReplaceEnd = caret;
+    renderDslSuggestionsDropdown();
+}
+
+function measureCharWidth(font) {
+    if (charWidthCache[font] != null) return charWidthCache[font];
+    const measureCanvas = document.createElement('canvas');
+    const ctx = measureCanvas.getContext('2d');
+    ctx.font = font;
+    const w = ctx.measureText('0').width || 7;
+    charWidthCache[font] = w;
+    return w;
+}
+
+// Pixel position for the dropdown, anchored just under the caret. The
+// editor uses white-space: pre (no line wrapping, horizontal scroll
+// instead — see style.css), so every DSL line is exactly one visual row,
+// meaning caret position is plain monospace-grid arithmetic rather than
+// needing a full mirror-element measurement, matching the original LWC
+// editor's own approach exactly.
+function computeDslSuggestStyle(textareaEl, caret) {
+    const cs = getComputedStyle(textareaEl);
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const charWidth = measureCharWidth(font);
+    const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3;
+    const padLeft = parseFloat(cs.paddingLeft) || 0;
+    const padTop = parseFloat(cs.paddingTop) || 0;
+
+    const before = textareaEl.value.substring(0, caret);
+    const row = (before.match(/\n/g) || []).length;
+    const col = caret - before.lastIndexOf('\n') - 1;
+
+    // offsetLeft/offsetTop are relative to the nearest positioned
+    // ancestor — .dsl-editor-wrap has position: relative for exactly
+    // this reason, so these are already relative to the right container.
+    const rawX = textareaEl.offsetLeft + padLeft + col * charWidth - textareaEl.scrollLeft;
+    const rawY = textareaEl.offsetTop + padTop + (row + 1) * lineHeight - textareaEl.scrollTop;
+
+    const DSL_SUGGEST_WIDTH = 220;
+    const maxLeft = Math.max(4, textareaEl.offsetWidth - DSL_SUGGEST_WIDTH - 20);
+    const x = Math.min(Math.max(4, rawX), maxLeft);
+    const y = Math.max(4, rawY);
+
+    return `left:${Math.round(x)}px; top:${Math.round(y)}px; width:${DSL_SUGGEST_WIDTH}px;`;
+}
+
+function renderDslSuggestionsDropdown() {
+    dslSuggestDropdown.innerHTML = '';
+    dslSuggestItems.forEach((item, idx) => {
+        const el = document.createElement('div');
+        el.className = 'suggest-item';
+        el.dataset.index = String(idx);
+
+        const label = document.createElement('span');
+        label.className = 'dsl-suggest-label';
+        label.textContent = item.label;
+        el.appendChild(label);
+
+        if (item.detail) {
+            const detail = document.createElement('span');
+            detail.className = 'dsl-suggest-detail';
+            detail.textContent = item.detail;
+            el.appendChild(detail);
+        }
+
+        el.addEventListener('click', () => applyDslSuggestion(idx));
+        dslSuggestDropdown.appendChild(el);
+    });
+    dslSuggestDropdown.style.cssText = computeDslSuggestStyle(editor, editor.selectionStart);
+    dslSuggestDropdown.hidden = false;
+}
+
+function applyDslSuggestion(idx) {
+    const item = dslSuggestItems[idx];
+    if (!item) return;
+
+    const before = editor.value.substring(0, dslReplaceStart);
+    const after = editor.value.substring(dslReplaceEnd);
+    const insert = item.insertText + (item.appendText || '');
+    const next = before + insert + after;
+    const caretPos = before.length + insert.length;
+
+    editor.value = next;
+    editor.selectionStart = caretPos;
+    editor.selectionEnd = caretPos;
+    editor.focus();
+
+    markDirty();
+    scheduleRender();
+    dslSuggestDropdown.hidden = true;
+    dslSuggestItems = [];
+
+    // Re-check immediately after inserting — e.g. picking a relationship
+    // field name should immediately offer the arrow context next,
+    // matching the LWC's own re-entrant call after applying a suggestion.
+    updateDslSuggestions();
+}
+
+function handleDslEditorKeyDown(e) {
+    if (!dslSuggestDropdown.hidden && dslSuggestItems.length > 0) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            dslSuggestDropdown.hidden = true;
+            dslSuggestItems = [];
+            return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            applyDslSuggestion(0);
+            return;
+        }
+    }
+    if (e.key === 'Tab') {
+        // Tab with no suggestion open: insert 2 spaces instead of
+        // jumping focus away from the editor.
+        e.preventDefault();
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const next = editor.value.substring(0, start) + '  ' + editor.value.substring(end);
+        editor.value = next;
+        editor.selectionStart = start + 2;
+        editor.selectionEnd = start + 2;
+        markDirty();
+        scheduleRender();
+    }
 }
 
 function doImport() {
@@ -310,6 +493,15 @@ function handleExtensionMessage(event) {
     } else if (msg.type === 'objectList') {
         allObjectNames = msg.names || [];
         renderSuggestions();
+    } else if (msg.type === 'entityFields') {
+        const key = (msg.entityName || '').toLowerCase();
+        objectFieldsCache[key] = msg.fields || [];
+        delete objectFieldsFetching[key];
+        // Re-check now that this entity's fields have arrived — so a
+        // context that was waiting on this data updates automatically
+        // rather than requiring another keystroke to see it, matching
+        // the LWC's own re-render-after-fetch behavior.
+        updateDslSuggestions();
     }
 }
 

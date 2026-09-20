@@ -26,7 +26,9 @@ what's still missing — not everything from the original app is here yet.
 
 - **The DSL parser, geometry engine, and Mermaid/draw.io export logic**
   (`src/erDiagramLogic.js`) is a direct, unmodified port from the
-  original project. Same file, same 30 tests, all passing here.
+  original project, re-synced most recently to pick up the `[Required]`
+  field marker feature and the bracket-aware field-list splitting fix.
+  Same file, same 35 tests, all passing here.
 - **Org connection**: a status bar item shows the current default org
   (or prompts to select one); `Salesforce ER Modeller: Select Org` lists
   every authenticated org via `sf org list` and switches the CLI's
@@ -37,11 +39,15 @@ what's still missing — not everything from the original app is here yet.
   Summary vs. genuine Formula, required, friendly type label), and
   appends the resulting DSL to the editor — a direct TypeScript port of
   `SchemaMetadataController.cls`'s classification logic
-  (`src/schemaService.ts`), backed by 14 new unit tests covering the
-  same cases the original Apex logic was verified against (including
-  the additive `cascadeDelete` signal for Master-Detail detection, and
-  the `calculated`-must-gate-first fix for Roll-Up Summary — a real bug
-  this port's own tests caught before it shipped, not a hypothetical).
+  (`src/schemaService.ts`), backed by 16 unit tests covering the same
+  cases the original Apex logic was verified against (including the
+  additive `cascadeDelete` signal for Master-Detail detection, the
+  `calculated`-must-gate-first fix for Roll-Up Summary, and — found and
+  fixed here directly, mirroring a real bug already caught once in the
+  Apex version — Checkbox fields and true system fields like
+  `CreatedDate` no longer show as `required` just because they are
+  non-nillable by platform design; `required` now also needs
+  `createable` and a non-Checkbox type).
 - **Full canvas styling**: primary keys marked with a gold `*`,
   relationship fields with a purple `~`, Roll-Up Summary fields with a
   teal `Σ` — the same visual language as the original app, not a new
@@ -69,6 +75,24 @@ what's still missing — not everything from the original app is here yet.
   from the DOM wiring, since the DOM interaction isn't something this
   environment can verify without real VS Code, but the matching logic
   underneath it is.
+- **DSL editor autocomplete**: typing directly in the DSL editor itself
+  (not just the Import panel) now offers live suggestions for the
+  `entity` keyword, object names, field names (with the same
+  `[Type, Required]` marker Import from Org would generate), a
+  relationship field's own name, the relationship arrow (`=>`/`->`/`~>`),
+  and the target entity on the other side of an arrow — six distinct
+  contexts total, ported directly from the original app's own
+  `detectDslContext`, including its two known, already-fixed bugs
+  preserved intact rather than re-derived from scratch: bracket-aware
+  field-list splitting (a field with its own `[Type]` suffix earlier on
+  the line no longer breaks detection for anything typed after it), and
+  cursor-position-aware exclusion (a field already on the line, even one
+  sitting after wherever the cursor currently is, is correctly excluded
+  from suggesting itself again). The context-detection logic itself is
+  pure and unit tested (14 tests, one per context plus both bug-fix
+  scenarios explicitly) exactly like the object-autocomplete filtering
+  above; the DOM wiring and on-screen dropdown positioning follow the
+  same real, stated limitation below.
 
 ## What's not built yet
 
@@ -77,9 +101,8 @@ what's still missing — not everything from the original app is here yet.
 - **Drag-and-drop from a visual palette** — the object list now feeds a
   text-based autocomplete (above), but there's no separate visual
   palette panel to drag entities from directly onto the canvas yet.
-- **DSL autocomplete, the object summary hover card, the smart
-  relationship linter, schema drift comparison** — none of these exist
-  yet.
+- **The object summary hover card, the smart relationship linter, schema
+  drift comparison** — none of these exist yet.
 - **Multi-file tabs** — each `Salesforce ER Modeller: Open` opens a
   single panel; there's no tab strip for working on several diagrams at
   once yet.

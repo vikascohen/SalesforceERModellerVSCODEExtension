@@ -121,12 +121,21 @@ export function classifyDescribe(raw: SfCliDescribe): ClassifiedObject {
             relatesTo: rel.relatesTo,
             isRollupSummary: rel.isRelationship ? false : isRollup,
             friendlyType: rel.isRelationship ? null : friendlyType(f, isRollup),
-            // required reflects the field's own schema definition (not
-            // nillable), not the current user's own createable() permission --
-            // matches the same fix already made in the Apex version, for the
-            // same reason: this is a property of the field, not of whoever
-            // is asking.
-            required: !f.nillable
+            // Real bug fix ported over from the Apex version, not the
+            // original reasoning: a plain "!f.nillable" here was found to
+            // mark every Checkbox field (a checkbox can never be null by
+            // platform design, confirmed directly against Salesforce's own
+            // help docs on this exact problem) and every true system field
+            // (CreatedDate, LastModifiedDate, SystemModstamp -- read-only
+            // for every user, with no createable toggle that could ever
+            // change that) as required on every single object. Checkboxes
+            // are excluded entirely; createable is back as an additional
+            // condition, since for these specific system fields it is a
+            // structural fact of the field, not a per-viewer permission
+            // fact -- see SchemaMetadataController.cls's own comment on
+            // this exact fix for the full reasoning and the acknowledged,
+            // rarer tradeoff it accepts.
+            required: f.type !== 'boolean' && !f.nillable && f.createable
         };
     });
 

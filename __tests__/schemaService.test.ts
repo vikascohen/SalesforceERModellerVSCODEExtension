@@ -117,11 +117,38 @@ describe('classifyDescribe — Roll-Up Summary vs Formula', () => {
 });
 
 describe('classifyDescribe — required and friendly type', () => {
-    it('required reflects nillable only, not createable', () => {
+    it('required needs nillable=false AND createable=true — not nillable alone', () => {
+        // A real bug this fix corrects: a field that is genuinely not
+        // createable by anyone (true system fields, checked separately
+        // below) must not show as required just because it also happens
+        // to be non-nillable.
         const result = classifyDescribe(describe_('Account', [
-            field({ name: 'Name', type: 'string', nillable: false, createable: false })
+            field({ name: 'Name', type: 'string', nillable: false, createable: true })
         ]));
         expect(result.fields[0].required).toBe(true);
+    });
+
+    it('a Checkbox field is never required, even though it can never be null by platform design', () => {
+        // Confirmed directly against Salesforce's own help documentation:
+        // a checkbox field is inherently non-nillable since it can only
+        // ever be true or false, never blank -- that is a platform
+        // artifact, not a "you must fill this in" signal the way it is
+        // for a Text or Number field.
+        const result = classifyDescribe(describe_('Contact', [
+            field({ name: 'DoNotCall', type: 'boolean', nillable: false, createable: true })
+        ]));
+        expect(result.fields[0].required).toBe(false);
+    });
+
+    it('a true system field (not createable by anyone) is never required, even though it is non-nillable', () => {
+        // CreatedDate, LastModifiedDate, SystemModstamp are read-only for
+        // every user, with no createable toggle that could ever change
+        // that for anyone -- createable=false here is a structural fact
+        // of the field, not a per-viewer permission fact.
+        const result = classifyDescribe(describe_('Contact', [
+            field({ name: 'CreatedDate', type: 'datetime', nillable: false, createable: false })
+        ]));
+        expect(result.fields[0].required).toBe(false);
     });
 
     it('maps common REST API lowercase type strings to Setup-style labels', () => {
