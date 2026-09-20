@@ -1153,6 +1153,13 @@ function handleExtensionMessage(event) {
             sharingSignals[name.toLowerCase()] = msg.signals[name];
         });
     } else if (msg.type === 'schemaDriftData') {
+        // Real, if rare, race this avoids: the extension host describes
+        // every entity SEQUENTIALLY, which can take a moment for many
+        // entities — if the user closes the modal before this response
+        // arrives, applying it anyway would silently reopen the modal
+        // they'd already dismissed. Skip a response that arrives after
+        // the modal has been closed.
+        if (driftModal.hidden) return;
         let model;
         try {
             model = parseEr(editor.value);
