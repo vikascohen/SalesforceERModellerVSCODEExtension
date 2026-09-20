@@ -29,7 +29,15 @@ let statusBarItem: vscode.StatusBarItem;
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('sfErModeller.open', () => {
-            ErModellerPanel.createOrShow(context.extensionUri);
+            // forceNew: true here too, not just newDiagram -- opening a
+            // different .erd file is a deliberate action that deserves
+            // its own tab, the same way opening a different text file
+            // does, rather than silently replacing whatever diagram (and
+            // its unsaved edits) is currently showing in the one existing
+            // panel. VS Code's own editor tab strip handles the actual
+            // multi-tab UI for free once each panel is genuinely separate
+            // -- no custom tab UI needed on top of it.
+            ErModellerPanel.createOrShow(context.extensionUri, /* forceNew */ true);
         }),
         vscode.commands.registerCommand('sfErModeller.selectOrg', selectOrgCommand),
         vscode.commands.registerCommand('sfErModeller.newDiagram', () => {
@@ -98,9 +106,11 @@ async function selectOrgCommand(): Promise<void> {
     if (!picked) return;
     await setTargetOrg(picked.username);
     await refreshStatusBar();
-    if (ErModellerPanel.currentPanel) {
-        ErModellerPanel.currentPanel.notifyOrgChanged();
-    }
+    // Notify EVERY open panel, not just the most recently created one --
+    // with multiple tabs now possible (see forceNew below), an org
+    // switch should update every diagram's status text, not silently
+    // leave older tabs showing a stale org.
+    ErModellerPanel.allPanels.forEach((p) => p.notifyOrgChanged());
 }
 
 function errorMessage(e: unknown): string {
@@ -110,6 +120,10 @@ function errorMessage(e: unknown): string {
 
 class ErModellerPanel {
     public static currentPanel: ErModellerPanel | undefined;
+    // Every currently-open panel, not just the most recent one -- needed
+    // once multiple tabs are possible (see forceNew below), for anything
+    // that must reach every open diagram rather than only the newest.
+    public static allPanels: ErModellerPanel[] = [];
     private static readonly viewType = 'sfErModeller';
 
     private readonly panel: vscode.WebviewPanel;
@@ -149,6 +163,7 @@ class ErModellerPanel {
         );
 
         ErModellerPanel.currentPanel = new ErModellerPanel(panel, extensionUri);
+        ErModellerPanel.allPanels.push(ErModellerPanel.currentPanel);
     }
 
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
@@ -514,7 +529,16 @@ class ErModellerPanel {
     }
 
     private dispose(): void {
-        ErModellerPanel.currentPanel = undefined;
+        // Real bug this fix avoids, exposed by allowing multiple panels
+        // open at once (see forceNew above): unconditionally clearing the
+        // static currentPanel here meant closing an OLDER tab, while a
+        // newer one was still open, incorrectly cleared the reference to
+        // that still-open newer panel too. Only clear it if this instance
+        // actually IS the currently-tracked one.
+        if (ErModellerPanel.currentPanel === this) {
+            ErModellerPanel.currentPanel = undefined;
+        }
+        ErModellerPanel.allPanels = ErModellerPanel.allPanels.filter((p) => p !== this);
         this.panel.dispose();
         while (this.disposables.length) {
             const d = this.disposables.pop();

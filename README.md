@@ -164,15 +164,28 @@ what's still missing — not everything from the original app is here yet.
   full field object is still in scope, so a field added this way lands
   identical to one added via Import from Org or autocomplete, not a
   bare, unmarked name.
+- **Multi-file tabs**: both `Salesforce ER Modeller: New Diagram` and
+  `Salesforce ER Modeller: Open` now create a genuinely separate panel
+  each time, rather than the earlier singleton behavior where `Open`
+  silently replaced whatever diagram (and its unsaved edits) was already
+  showing in the one existing panel. VS Code's own editor tab strip
+  provides the actual multi-tab UI for free once each panel is genuinely
+  separate — no custom tab UI needed on top of it, unlike the original
+  LWC app, which had to build its own. Fixed a real bug found while
+  wiring this up, not just flipped a flag: the panel's own disposal
+  logic unconditionally cleared the extension's single tracked
+  "current panel" reference on close, so closing an OLDER tab while a
+  NEWER one was still open incorrectly lost track of that still-open
+  newer panel too — fixed by only clearing that reference when the
+  closing panel is actually the one being tracked, and separately
+  tracking every open panel in its own list for anything (like an org
+  switch) that needs to reach all of them, not just the most recent one.
 
 ## What's not built yet
 
 - **Drag-and-drop from a visual palette** — the object list now feeds a
   text-based autocomplete (above), but there's no separate visual
   palette panel to drag entities from directly onto the canvas yet.
-- **Multi-file tabs** — each `Salesforce ER Modeller: Open` opens a
-  single panel; there's no tab strip for working on several diagrams at
-  once yet.
 - **Themes** — the canvas currently just uses VS Code's own theme colors
   automatically (a side effect of using `var(--vscode-*)` throughout,
   not a deliberate theming feature); none of the original's four named
