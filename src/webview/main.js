@@ -427,6 +427,7 @@ function openDictionary() {
 
 function closeDictionary() {
     dictionaryPanel.hidden = true;
+    dictionaryIntelligence.hidden = true;
 }
 
 function renderDictionaryObjectList() {
