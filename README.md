@@ -1,20 +1,15 @@
 # Salesforce ER Modeller (VS Code extension)
 
-A VS Code port of [Salesforce ER Modeller Studio](https://github.com/vikascohen/SalesforceERModellerStudio),
+A VS Code port of [Salesforce ER Modeller Studio](https://github.com/vikascohen/Salesforce-ER-Modeller-Studio),
 the native Lightning Web Component app for the same purpose. That project
 remains the org-native / managed-package version; this is a separate,
 standalone extension for working with Salesforce data models directly in
 VS Code, with no dependency on it or on the target org having anything
 installed.
 
-**Status: the full feature set is ported**, one item deliberately
-excluded for a stated reason (see "What's not built yet" below), not
-left undone. Built incrementally, verified at each step, the same way
-the original LWC app was. Below is an honest account of what's
-genuinely working, and the one considered exception — not a claim that
-every line of this port has been clicked through in a real VS Code
-window; see the limitation section further down for exactly what that
-means and doesn't mean.
+**Status: Studio Version 2 parity is being completed on the `studio-v2-parity` branch.** The extension keeps the same ER DSL and graph semantics as Salesforce ER Modeller Studio while adapting org-native behaviours to native VS Code equivalents. The parity work is intentionally evidence-based: a feature is only described as present when the implementation exists in this repository.
+
+The VS Code edition does not require Salesforce ER Modeller Studio to be installed in the target org. It uses authenticated Salesforce CLI orgs for live metadata and stores diagrams as local `.erd` files, making them natural Git assets.
 
 ## Requirements
 
@@ -197,13 +192,36 @@ means and doesn't mean.
   so a drop just adds the entity and lets the geometry engine place it,
   consistent with how every other entity on this canvas is positioned.
 
-## What's not built yet
+## Studio Version 2 parity
 
-Nothing, as a checklist — the original's full feature set is now ported.
-One item is deliberately NOT ported, for a real reason rather than left
-undone, worth stating plainly rather than leaving as a vague gap:
+The parity branch now includes the Version 1 foundation plus the Version 2 data-architecture layer:
 
-- **The four named themes** (Dark+, Light+, Monokai, Solarized Light)
+- live DSL-to-visual ER modelling with Salesforce-aware autocomplete
+- Import from Org, object palette, relationship linting and schema drift comparison
+- Data Dictionary with on-demand field usage plus XLSX and CSV export
+- Sharing View, sharing evidence, record heatmap and object hover summaries
+- Mermaid, draw.io and PNG diagram export
+- Mimic New ER for point-and-click custom-object modelling with automatic `__c` normalisation
+- freeform object positioning, object resizing, zoom and Auto Layout reset
+- multi-file VS Code tabs and local `.erd` persistence
+- Architecture Overview
+- Object Map & Impact with bounded blast-radius evidence
+- Relationship Path Finder
+- Object Usage & Change Readiness
+- Relationship Insights with self relationships omitted from the interpretation table
+- Junction Intelligence
+- the same bounded, reusable graph-analysis engine used by Studio Version 2
+- compile, Jest and bundle CI on the parity branch
+
+Architecture Intelligence remains **data architecture only**. It does not perform CRUD/FLS, permission, vulnerability or security-posture analysis.
+
+### Native VS Code differences
+
+Some Studio behaviours intentionally map to the host editor rather than being copied literally. VS Code supplies the tab strip, filesystem, Git workflow and active colour theme. The extension therefore uses native editor tabs and the active VS Code theme instead of recreating Salesforce record tabs or Studio's four-theme preference picker.
+
+## Historical theme decision
+
+The four named Studio themes (Dark+, Light+, Monokai, Solarized Light)
   aren't implemented as a picker here, and this is a considered decision
   rather than a missing feature. The original LWC app needed its own
   theme system because it runs *inside* Salesforce, which has no host
@@ -220,27 +238,16 @@ undone, worth stating plainly rather than leaving as a vague gap:
   oversight, and revisiting it would need a real reason beyond "the
   original had it."
 
-## A genuine limitation of this whole port, stated plainly
+## Verification
 
-Everything above has been verified by compiling cleanly (`tsc`),
-running the Jest suite, and reviewing the code directly — **nothing has
-been interactively launched inside real VS Code**, since the environment
-this was built in has no VS Code binary at all. The `sf` CLI shape
-assumptions in `sfCli.ts` and `schemaService.ts` are based on
-Salesforce's long-stable, publicly documented REST Describe API (which
-`sf sobject describe` wraps directly) — not guessed at, but also not run
-against a live, authenticated org from here, since none is available in
-this environment either. Treat "compiles and passes its tests" as
-exactly that, not as "confirmed working end to end" until someone
-actually presses F5, connects a real org, and reports back what
-happens.
+The repository has automated Jest coverage and now includes GitHub Actions steps for TypeScript compilation, Jest and bundling. Salesforce CLI integration still needs an authenticated org for true end-to-end validation, so unit/CI success should not be confused with having exercised every Salesforce response shape in every org.
 
 ## Development
 
 ```bash
 npm install
 npm run compile   # or: npm run watch
-npm test          # Jest — 86 tests across 6 files: erDiagramLogic, schemaService, paletteFilter, dslIntellisense, relationshipLinter, schemaDrift
+npm test          # Jest, including Studio V2 Architecture Intelligence
 ```
 
 To run the extension inside VS Code for development/testing: open this
