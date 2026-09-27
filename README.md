@@ -198,7 +198,7 @@ The parity branch now includes the Version 1 foundation plus the Version 2 data-
 
 - live DSL-to-visual ER modelling with Salesforce-aware autocomplete
 - Import from Org, object palette, relationship linting and schema drift comparison
-- Data Dictionary with on-demand field usage plus XLSX and CSV export
+- Data Dictionary with on-demand field usage, field composition, documentation coverage, relationship concentration, naming families and XLSX/CSV export
 - Sharing View, sharing evidence, record heatmap and object hover summaries
 - Mermaid, draw.io and PNG diagram export
 - Mimic New ER for point-and-click custom-object modelling with automatic `__c` normalisation
@@ -210,6 +210,8 @@ The parity branch now includes the Version 1 foundation plus the Version 2 data-
 - Object Usage & Change Readiness
 - Relationship Insights with self relationships omitted from the interpretation table
 - Junction Intelligence
+- explicit Architecture Domains and cross-domain coupling analysis without guessing business ownership
+- Architecture Intelligence PNG report export
 - the same bounded, reusable graph-analysis engine used by Studio Version 2
 - compile, Jest and bundle CI on the parity branch
 
