@@ -8,6 +8,7 @@ import { detectDslContext } from './dslIntellisense.js';
 import { buildFieldMarkerSuffix } from './fieldMarkers.js';
 import { scanForMissingRelationships } from './relationshipLinter.js';
 import { computeSchemaDrift } from './schemaDrift.js';
+import { analyseArchitecture, analyseObject, findArchitecturePath, analyseBlastRadius, detectJunctionObjects } from './architectureIntelligence.js';
 
 const vscode = acquireVsCodeApi();
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -51,6 +52,7 @@ const saveAsBtn = document.getElementById('saveAsBtn');
 const exportMermaidBtn = document.getElementById('exportMermaidBtn');
 const exportDrawioBtn = document.getElementById('exportDrawioBtn');
 const focusToggle = document.getElementById('focusToggle');
+const architectureBtn=document.getElementById('architectureBtn'),architecturePanel=document.getElementById('architecturePanel'),architectureBody=document.getElementById('architectureBody'),architectureCloseBtn=document.getElementById('architectureCloseBtn'),architectureRefreshBtn=document.getElementById('architectureRefreshBtn');
 
 let parseEr, buildErGeometry, buildMermaidErDiagram, buildDrawioXml, splitFieldList;
 let renderTimer = null;
@@ -86,6 +88,7 @@ let dismissedSuggestionKeys = new Set();
 let relScanTimer = null;
 
 let driftResults = [];
+let architectureAnalysis=null,architectureTab='overview',architectureObject='',architecturePathSource='',architecturePathTarget='';
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -151,6 +154,8 @@ async function init() {
     linterAddAllBtn.addEventListener('click', handleAddAllSuggestions);
     linterDismissBtn.addEventListener('click', handleDismissSuggestions);
     compareOrgBtn.addEventListener('click', openDriftCheck);
+    architectureBtn.addEventListener('click',openArchitecture); architectureCloseBtn.addEventListener('click',()=>architecturePanel.hidden=true); architectureRefreshBtn.addEventListener('click',refreshArchitecture);
+    document.querySelectorAll('[data-arch-tab]').forEach(btn=>btn.addEventListener('click',()=>{architectureTab=btn.dataset.archTab;document.querySelectorAll('[data-arch-tab]').forEach(b=>b.classList.toggle('active',b===btn));renderArchitecture();}));
     driftCloseBtn.addEventListener('click', closeDriftModal);
     paletteToggleBtn.addEventListener('click', togglePalette);
     paletteSearch.addEventListener('input', renderPaletteList);
@@ -367,6 +372,19 @@ function handleDslEditorKeyDown(e) {
         markDirty();
         scheduleRender();
     }
+}
+
+
+function archEsc(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+function openArchitecture(){architecturePanel.hidden=false;refreshArchitecture();}
+function refreshArchitecture(){try{architectureAnalysis=analyseArchitecture(parseEr(editor.value||''));const n=architectureAnalysis.nodes;if(!architectureObject&&n.length)architectureObject=n[0].name;if(!architecturePathSource&&n.length)architecturePathSource=n[0].name;if(!architecturePathTarget&&n.length>1)architecturePathTarget=n[1].name;renderArchitecture();}catch(e){architectureAnalysis=null;architectureBody.innerHTML='<div class="arch-card"><strong>Analysis unavailable</strong><div class="arch-muted">'+archEsc(e.message||e)+'</div></div>';}}
+function archOptions(s){return(architectureAnalysis?.nodes||[]).map(n=>'<option value="'+archEsc(n.name)+'"'+(n.name===s?' selected':'')+'>'+archEsc(n.name)+'</option>').join('');}
+function renderArchitecture(){const a=architectureAnalysis;if(!a)return;
+ if(architectureTab==='overview'){const metrics=[['Objects',a.entityCount],['Fields',a.fieldCount],['Relationships',a.relationshipCount],['Components',a.componentCount],['Max depth',a.maxRelationshipDepth],['Density',a.relationshipDensity],['Custom objects',a.customObjectCount],['Cycles',a.cycles.length]];architectureBody.innerHTML='<div class="arch-metrics">'+metrics.map(x=>'<div class="arch-metric"><div class="arch-muted">'+x[0]+'</div><div class="arch-metric-value">'+x[1]+'</div></div>').join('')+'</div><div class="arch-grid"><div class="arch-card"><strong>Most connected</strong><ul class="arch-list">'+a.mostConnected.map(n=>'<li>'+archEsc(n.name)+' · '+n.degree+' relationships</li>').join('')+'</ul></div><div class="arch-card"><strong>Isolated objects</strong><ul class="arch-list">'+(a.islands.length?a.islands.map(n=>'<li>'+archEsc(n.name)+'</li>').join(''):'<li>None</li>')+'</ul></div><div class="arch-card"><strong>Architecture observations</strong><ul class="arch-list">'+(a.observations.length?a.observations.map(o=>'<li><strong>'+archEsc(o.title)+'</strong>: '+archEsc(o.detail)+'</li>').join(''):'<li>None</li>')+'</ul></div><div class="arch-card"><strong>Relationship mix</strong><div>Lookup: '+a.lookupCount+'</div><div>Master Detail: '+a.masterDetailCount+'</div><div>Polymorphic: '+a.polymorphicCount+'</div><div>Parallel: '+a.parallelRelationshipCount+'</div></div></div>';return;}
+ if(architectureTab==='object'||architectureTab==='usage'){const d=analyseObject(a,architectureObject),b=analyseBlastRadius(a,architectureObject,3);architectureBody.innerHTML='<div class="arch-controls">Object <select id="archObject">'+archOptions(architectureObject)+'</select></div>'+(d?'<div class="arch-metrics"><div class="arch-metric"><div class="arch-muted">Role</div>'+archEsc(d.role)+'</div><div class="arch-metric"><div class="arch-muted">Incoming</div><div class="arch-metric-value">'+d.incoming+'</div></div><div class="arch-metric"><div class="arch-muted">Outgoing</div><div class="arch-metric-value">'+d.outgoing+'</div></div><div class="arch-metric"><div class="arch-muted">Reach within 3 hops</div><div class="arch-metric-value">'+d.reachableWithin3+'</div></div></div><div class="arch-grid"><div class="arch-card"><strong>Depends on</strong><ul class="arch-list">'+(d.parents.length?d.parents.map(x=>'<li>'+archEsc(x.name)+' via '+archEsc(x.field||x.kind)+'</li>').join(''):'<li>None represented</li>')+'</ul></div><div class="arch-card"><strong>Depended on by</strong><ul class="arch-list">'+(d.children.length?d.children.map(x=>'<li>'+archEsc(x.name)+' via '+archEsc(x.field||x.kind)+'</li>').join(''):'<li>None represented</li>')+'</ul></div><div class="arch-card"><strong>Change impact / blast radius</strong><div>'+b.total+' object(s) reachable within '+b.maxDepth+' hops.</div><div class="arch-muted">Structural evidence, not a prediction that every reachable object will break.</div></div><div class="arch-card"><strong>Cycles</strong><ul class="arch-list">'+(d.cycles.length?d.cycles.map(x=>'<li>'+archEsc(x.join(' → '))+'</li>').join(''):'<li>None detected</li>')+'</ul></div></div>':'');document.getElementById('archObject')?.addEventListener('change',e=>{architectureObject=e.target.value;renderArchitecture();});return;}
+ if(architectureTab==='path'){const p=findArchitecturePath(a,architecturePathSource,architecturePathTarget);architectureBody.innerHTML='<div class="arch-controls">From <select id="archFrom">'+archOptions(architecturePathSource)+'</select> To <select id="archTo">'+archOptions(architecturePathTarget)+'</select></div><div class="arch-card">'+(p?.found?'<strong>'+p.hops+' hop'+(p.hops===1?'':'s')+'</strong><div>'+p.path.map(archEsc).join(' → ')+'</div>':'No structural path found.')+'</div>';document.getElementById('archFrom')?.addEventListener('change',e=>{architecturePathSource=e.target.value;renderArchitecture();});document.getElementById('archTo')?.addEventListener('change',e=>{architecturePathTarget=e.target.value;renderArchitecture();});return;}
+ if(architectureTab==='junctions'){const j=detectJunctionObjects(a);architectureBody.innerHTML='<div class="arch-card"><strong>Junction candidates</strong><div class="arch-muted">Strong patterns have multiple distinct Master Detail parents. This is structural evidence, not business intent.</div><table class="arch-table"><tr><th>Object</th><th>Pattern</th><th>Parents</th></tr>'+j.map(x=>'<tr><td>'+archEsc(x.name)+'</td><td>'+archEsc(x.pattern)+'</td><td>'+archEsc((x.parents||[]).map(p=>p.name||p).join(', '))+'</td></tr>').join('')+'</table></div>';return;}
+ if(architectureTab==='relationships'){architectureBody.innerHTML='<div class="arch-card"><strong>Relationship detail</strong><div class="arch-muted">Self relationships are omitted from this interpretation view.</div><table class="arch-table"><tr><th>Child</th><th>Field</th><th>Type</th><th>Parent</th></tr>'+a.relationships.filter(x=>x.childEntity.toLowerCase()!==x.parentEntity.toLowerCase()).map(x=>'<tr><td>'+archEsc(x.childEntity)+'</td><td>'+archEsc(x.childField||'')+'</td><td>'+archEsc(x.kind||'relationship')+'</td><td>'+archEsc(x.parentEntity)+'</td></tr>').join('')+'</table></div>';}
 }
 
 // ── Data Dictionary ──
