@@ -52,6 +52,7 @@ const saveAsBtn = document.getElementById('saveAsBtn');
 const exportMermaidBtn = document.getElementById('exportMermaidBtn');
 const exportDrawioBtn = document.getElementById('exportDrawioBtn');
 const focusToggle = document.getElementById('focusToggle');
+const mimicBtn=document.getElementById('mimicBtn'),mimicModal=document.getElementById('mimicModal'),mimicCloseBtn=document.getElementById('mimicCloseBtn'),mimicAddObjectBtn=document.getElementById('mimicAddObjectBtn'),mimicGenerateBtn=document.getElementById('mimicGenerateBtn'),mimicModelName=document.getElementById('mimicModelName'),mimicBody=document.getElementById('mimicBody'),mimicError=document.getElementById('mimicError'),exportPngBtn=document.getElementById('exportPngBtn'),dictionaryCsvBtn=document.getElementById('dictionaryCsvBtn');
 const architectureBtn=document.getElementById('architectureBtn'),architecturePanel=document.getElementById('architecturePanel'),architectureBody=document.getElementById('architectureBody'),architectureCloseBtn=document.getElementById('architectureCloseBtn'),architectureRefreshBtn=document.getElementById('architectureRefreshBtn');
 
 let parseEr, buildErGeometry, buildMermaidErDiagram, buildDrawioXml, splitFieldList;
@@ -89,6 +90,7 @@ let relScanTimer = null;
 
 let driftResults = [];
 let architectureAnalysis=null,architectureTab='overview',architectureObject='',architecturePathSource='',architecturePathTarget='';
+let mimicObjects=[],mimicSeq=0;
 
 // Ported directly from diagramStudio.js's injectDefs() -- generic SVG
 // marker-building with no LWC dependency to begin with, so this is a
@@ -132,6 +134,7 @@ async function init() {
         }
     });
     importBtn.addEventListener('click', doImport);
+    mimicBtn.addEventListener('click',openMimic); mimicCloseBtn.addEventListener('click',closeMimic); mimicAddObjectBtn.addEventListener('click',()=>{mimicAddObject();renderMimic();}); mimicGenerateBtn.addEventListener('click',generateMimic);
     importNames.addEventListener('keydown', (e) => { if (e.key === 'Enter') doImport(); });
     importNames.addEventListener('input', renderSuggestions);
     importNames.addEventListener('focus', () => {
@@ -149,6 +152,7 @@ async function init() {
     dictionarySearch.addEventListener('input', renderDictionaryObjectList);
     dictionaryUsageBtn.addEventListener('click', requestCalculateUsage);
     dictionaryExportBtn.addEventListener('click', exportDictionaryToExcel);
+    dictionaryCsvBtn.addEventListener('click', exportDictionaryToCsv);
     heatmapToggle.addEventListener('change', () => { requestSharingAndHeatmapData(true); scheduleRender(); });
     sharingViewToggle.addEventListener('change', () => { requestSharingAndHeatmapData(true); scheduleRender(); });
     linterAddAllBtn.addEventListener('click', handleAddAllSuggestions);
@@ -166,6 +170,7 @@ async function init() {
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
     exportMermaidBtn.addEventListener('click', doExportMermaid);
     exportDrawioBtn.addEventListener('click', doExportDrawio);
+    exportPngBtn.addEventListener('click', doExportPng);
     focusToggle.addEventListener('change', () => { focusedEntity = null; render(); });
     canvas.addEventListener('click', onCanvasClick);
 
@@ -387,6 +392,18 @@ function renderArchitecture(){const a=architectureAnalysis;if(!a)return;
  if(architectureTab==='relationships'){architectureBody.innerHTML='<div class="arch-card"><strong>Relationship detail</strong><div class="arch-muted">Self relationships are omitted from this interpretation view.</div><table class="arch-table"><tr><th>Child</th><th>Field</th><th>Type</th><th>Parent</th></tr>'+a.relationships.filter(x=>x.childEntity.toLowerCase()!==x.parentEntity.toLowerCase()).map(x=>'<tr><td>'+archEsc(x.childEntity)+'</td><td>'+archEsc(x.childField||'')+'</td><td>'+archEsc(x.kind||'relationship')+'</td><td>'+archEsc(x.parentEntity)+'</td></tr>').join('')+'</table></div>';}
 }
 
+
+const MIMIC_TYPES=['Text','Text Area','Long Text Area','Number','Currency','Percent','Checkbox','Date','DateTime','Email','Phone','URL','Picklist','Multi Select Picklist','Auto Number','Formula','Lookup','Master Detail','Polymorphic'];
+function mimicBase(v){return String(v||'').split('__')[0].replace(/_c$/i,'').replace(/_+$/g,'').replace(/[^A-Za-z0-9_]/g,'');}
+function mimicApi(v){const b=mimicBase(v);return b?b+'__c':'';}
+function mimicAddObject(){const id='mo'+(++mimicSeq);mimicObjects.push({id,name:'',fields:[{id:id+'id',name:'Id',type:'Id',locked:true,target:''},{id:id+'f1',name:'Name',type:'Text',locked:false,target:''}]});}
+function openMimic(){mimicObjects=[];mimicSeq=0;mimicModelName.value='Mimicked Model';mimicError.textContent='';mimicAddObject();mimicModal.hidden=false;renderMimic();}
+function closeMimic(){mimicModal.hidden=true;mimicObjects=[];}
+function renderMimic(){mimicBody.innerHTML='';mimicObjects.forEach(o=>{const card=document.createElement('div');card.className='mimic-card';const head=document.createElement('div');head.className='mimic-object-head';head.innerHTML='<input value="'+archEsc(o.name)+'" placeholder="Object name"><span class="mimic-api">'+archEsc(mimicApi(o.name)||'Object__c')+'</span><button>Remove</button>';const inp=head.querySelector('input');inp.addEventListener('input',e=>{o.name=mimicBase(e.target.value);e.target.value=o.name;renderMimic();});head.querySelector('button').addEventListener('click',()=>{mimicObjects=mimicObjects.filter(x=>x.id!==o.id);mimicObjects.forEach(x=>x.fields.forEach(f=>{if(f.target===o.id){f.target='';f.type='Text';}}));renderMimic();});card.appendChild(head);o.fields.forEach(field=>{const row=document.createElement('div');row.className='mimic-field';const name=document.createElement('input');name.value=field.name;name.disabled=field.locked;name.placeholder='Field name';name.addEventListener('input',e=>{field.name=mimicBase(e.target.value);e.target.value=field.name;});row.appendChild(name);const type=document.createElement('select');(field.locked?['Id']:MIMIC_TYPES).forEach(t=>{const op=document.createElement('option');op.value=t;op.textContent=t;op.selected=t===field.type;type.appendChild(op);});type.disabled=field.locked;type.addEventListener('change',e=>{field.type=e.target.value;if(['Lookup','Master Detail','Polymorphic'].includes(field.type)){const targets=mimicObjects.filter(x=>x.id!==o.id);field.target=targets[0]?.id||'';}else field.target='';renderMimic();});row.appendChild(type);if(['Lookup','Master Detail','Polymorphic'].includes(field.type)){const target=document.createElement('select');mimicObjects.filter(x=>x.id!==o.id).forEach(t=>{const op=document.createElement('option');op.value=t.id;op.textContent=mimicApi(t.name)||'Unnamed object';op.selected=t.id===field.target;target.appendChild(op);});target.addEventListener('change',e=>field.target=e.target.value);row.appendChild(target);}if(!field.locked){const rm=document.createElement('button');rm.textContent='Remove';rm.addEventListener('click',()=>{o.fields=o.fields.filter(x=>x.id!==field.id);renderMimic();});row.appendChild(rm);}card.appendChild(row);});const add=document.createElement('button');add.textContent='Add Field';add.addEventListener('click',()=>{o.fields.push({id:o.id+'f'+(++mimicSeq),name:'',type:'Text',locked:false,target:''});renderMimic();});card.appendChild(add);mimicBody.appendChild(card);});}
+function generateMimic(){const objs=mimicObjects.filter(o=>mimicBase(o.name));if(!objs.length){mimicError.textContent='Mimic New ER needs at least one named object.';return;}const names=new Set(objs.map(o=>mimicApi(o.name).toLowerCase()));if(names.size!==objs.length){mimicError.textContent='Object names must be unique.';return;}const byId=new Map(objs.map(o=>[o.id,o])),lines=[];for(const o of objs)for(const f of o.fields)if(['Lookup','Master Detail','Polymorphic'].includes(f.type)&&(!f.target||!byId.has(f.target))){mimicError.textContent='Choose a target for '+(mimicApi(f.name)||'relationship field')+' on '+mimicApi(o.name)+'.';return;}objs.forEach(o=>{const fs=o.fields.filter(f=>!f.locked&&mimicBase(f.name)&&!['Lookup','Master Detail','Polymorphic'].includes(f.type)).map(f=>mimicApi(f.name)+(f.type!=='Text'?' ['+f.type+']':''));lines.push('entity '+mimicApi(o.name)+(fs.length?' : '+fs.join(', '):''));});objs.forEach(o=>o.fields.filter(f=>!f.locked&&mimicBase(f.name)&&['Lookup','Master Detail','Polymorphic'].includes(f.type)).forEach(f=>{const t=byId.get(f.target),op=f.type==='Master Detail'?'=>':f.type==='Polymorphic'?'~>':'->';lines.push(mimicApi(o.name)+'.'+mimicApi(f.name)+' '+op+' '+mimicApi(t.name));}));editor.value=lines.join('\n');markDirty();render();closeMimic();setStatus('Mimic New ER generated '+objs.length+' custom object'+(objs.length===1?'':'s')+'.');}
+function doExportPng(){if(!lastModel){setStatus('Nothing to export yet.',true);return;}const clone=canvas.cloneNode(true);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');const xml=new XMLSerializer().serializeToString(clone);const img=new Image();const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob);img.onload=()=>{const out=document.createElement('canvas');out.width=Math.max(1,Number(canvas.getAttribute('width'))||800);out.height=Math.max(1,Number(canvas.getAttribute('height'))||600);const ctx=out.getContext('2d');ctx.fillStyle=getComputedStyle(document.body).backgroundColor||'#ffffff';ctx.fillRect(0,0,out.width,out.height);ctx.drawImage(img,0,0);URL.revokeObjectURL(url);vscode.postMessage({type:'exportPngToFile',dataUrl:out.toDataURL('image/png')});};img.onerror=()=>{URL.revokeObjectURL(url);setStatus('PNG export failed.',true);};img.src=url;}
+function exportDictionaryToCsv(){if(!dictionaryRow)return;const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const rows=[['API Name','Label','Type','Required','Description','Last Modified','% Populated'],...dictionaryRow.fields.map(f=>[f.apiName,f.label||'',f.friendlyType||f.dataType||'',f.required?'Yes':'No',f.description||'',f.lastModifiedDate||'',f.percentUsed==null?'':Math.round(f.percentUsed*10)/10])];vscode.postMessage({type:'exportCsvToFile',text:rows.map(r=>r.map(q).join(',')).join('\r\n'),name:(dictionaryRow.apiName||'DataDictionary')+'.csv'});}
+
 // ── Data Dictionary ──
 
 function openDictionary() {
@@ -433,6 +450,7 @@ function renderDictionaryTable() {
     dictionaryUsageBtn.disabled = dictionaryUsagePending;
     dictionaryUsageBtn.textContent = dictionaryUsagePending ? 'Calculating\u2026' : 'Calculate Usage';
     dictionaryExportBtn.hidden = false;
+    dictionaryCsvBtn.hidden = false;
 
     const table = document.createElement('table');
     table.className = 'dictionary-table';
