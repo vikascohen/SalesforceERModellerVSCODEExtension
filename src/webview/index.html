@@ -21,9 +21,11 @@
             <div id="suggestDropdown" class="suggest-dropdown" hidden></div>
         </div>
         <button id="importBtn" title="Describe these objects via the Salesforce CLI and add them to the canvas">Import from Org</button>
+        <button id="mimicBtn" title="Point-and-click custom object model builder">Mimic New ER</button>
         <span class="sep"></span>
         <button id="exportMermaidBtn" title="Copy Mermaid erDiagram syntax to the clipboard">Copy Mermaid</button>
         <button id="exportDrawioBtn" title="Export as a draw.io / diagrams.net file">Export draw.io</button>
+        <button id="exportPngBtn" title="Export the current diagram as PNG">Export PNG</button>
         <span class="sep"></span>
         <label class="toggle"><input type="checkbox" id="focusToggle"> Focus mode</label>
         <span class="sep"></span>
@@ -69,10 +71,17 @@
                 <span id="dictionaryDetailTitle">Select an object</span>
                 <button id="dictionaryUsageBtn" hidden>Calculate Usage</button>
                 <button id="dictionaryExportBtn" hidden>Export to Excel</button>
+                <button id="dictionaryCsvBtn" hidden>Export CSV</button>
                 <button id="dictionaryCloseBtn" title="Close Data Dictionary">\u2715</button>
             </div>
             <div id="dictionaryTableWrap" class="dictionary-table-wrap"></div>
         </div>
+    </div>
+
+    <div id="mimicModal" class="drift-modal" hidden>
+        <div class="mimic-inner"><div class="drift-modal-header"><span>Mimic New ER</span><button id="mimicCloseBtn">✕</button></div>
+        <div class="mimic-toolbar"><label>Model name <input id="mimicModelName" value="Mimicked Model"></label><button id="mimicAddObjectBtn">Add Object</button><button id="mimicGenerateBtn">Generate ER</button></div>
+        <div id="mimicError" class="mimic-error"></div><div id="mimicBody" class="mimic-body"></div></div>
     </div>
 
     <div id="architecturePanel" class="architecture-panel" hidden>
