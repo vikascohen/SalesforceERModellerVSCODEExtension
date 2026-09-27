@@ -30,13 +30,18 @@
   "displayName": "Salesforce ER Modeller",
   "publisher": "vikascohen",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.85.0",
+    "node": ">=22.18.0"
   },
   "categories": [
     "Visualization",
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:sfErModeller.open",
+    "onCommand:sfErModeller.newDiagram",
+    "onCommand:sfErModeller.selectOrg"
+  ],
   "contributes": {
     "commands": [
       {
