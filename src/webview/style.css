@@ -418,3 +418,115 @@ html, body {
 .mimic-inner{width:min(1000px,92vw);max-height:85vh;display:flex;flex-direction:column;background:var(--vscode-editor-background);border:1px solid var(--vscode-panel-border)}.mimic-toolbar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border)}.mimic-toolbar label{flex:1}.mimic-toolbar input,.mimic-card input,.mimic-card select{background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:4px 6px}.mimic-body{overflow:auto;padding:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:10px}.mimic-card{border:1px solid var(--vscode-panel-border);padding:10px}.mimic-object-head,.mimic-field{display:flex;gap:6px;align-items:center;margin-bottom:6px}.mimic-object-head input,.mimic-field input{flex:1;min-width:80px}.mimic-error{color:var(--vscode-errorForeground);padding:0 12px}.mimic-api{font-family:var(--vscode-editor-font-family,monospace);font-size:11px;color:var(--vscode-descriptionForeground)}
 
 .dictionary-intelligence{padding:10px;border-bottom:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background,var(--vscode-editor-background))}.dict-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-bottom:8px}.dict-metric{border:1px solid var(--vscode-panel-border);padding:7px}.dict-section{margin-top:10px}.dict-chip{display:inline-block;border:1px solid var(--vscode-panel-border);border-radius:10px;padding:2px 7px;margin:2px;font-size:11px}.domain-input{width:150px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);padding:3px 5px}
+
+
+/* VS Code responsive shell */
+body { overflow: hidden; }
+
+.toolbar {
+    flex-wrap: wrap;
+    align-content: flex-start;
+    min-height: 36px;
+    box-sizing: border-box;
+}
+
+.toolbar button,
+.toolbar .toggle {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.toolbar .autocomplete-wrap {
+    flex: 1 1 220px;
+    min-width: 160px;
+    max-width: 320px;
+}
+
+#importNames {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.main {
+    height: auto;
+    position: absolute;
+    top: var(--er-toolbar-height, 48px);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-width: 0;
+}
+
+.dsl-editor-wrap {
+    width: clamp(240px, 28vw, 360px);
+    min-width: 200px;
+}
+
+.canvas-wrap {
+    min-width: 0;
+}
+
+.architecture-panel,
+.dictionary-panel {
+    top: var(--er-toolbar-height, 48px);
+}
+
+.architecture-header {
+    flex-wrap: wrap;
+}
+
+.architecture-tabs {
+    overflow-x: auto;
+}
+
+.architecture-tabs button {
+    white-space: nowrap;
+}
+
+.drift-modal[hidden],
+.architecture-panel[hidden],
+.dictionary-panel[hidden],
+#mimicModal[hidden],
+.object-palette[hidden],
+.suggest-dropdown[hidden],
+.hover-card[hidden],
+.linter-panel[hidden] {
+    display: none !important;
+}
+
+#mimicModal {
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.mimic-inner {
+    width: min(960px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    border-radius: 4px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+
+.mimic-inner > .drift-modal-header {
+    flex: 0 0 auto;
+}
+
+.mimic-toolbar {
+    flex-wrap: wrap;
+}
+
+.mimic-toolbar label {
+    min-width: 220px;
+}
+
+@media (max-width: 900px) {
+    .sep { display: none; }
+    .toolbar { gap: 5px; }
+    .toolbar button { padding: 4px 7px; }
+    .dsl-editor-wrap { width: 240px; }
+    .mimic-body { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 650px) {
+    .dsl-editor-wrap { width: 200px; }
+    .toolbar .autocomplete-wrap { flex-basis: 180px; }
+}
