@@ -233,6 +233,12 @@ class ErModellerPanel {
             case 'exportDrawioToFile':
                 await this.handleExportToFile(msg.text as string, 'drawio', 'draw.io Files');
                 return;
+            case 'exportCsvToFile':
+                await this.handleExportToFile(msg.text as string, 'csv', 'CSV Files');
+                return;
+            case 'exportPngToFile':
+                await this.handleExportPng(msg.dataUrl as string);
+                return;
             case 'ready':
                 this.notifyOrgChanged();
                 return;
@@ -483,6 +489,15 @@ class ErModellerPanel {
         } catch (e) {
             vscode.window.showErrorMessage(`Could not export to Excel: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    private async handleExportPng(dataUrl: string): Promise<void> {
+        const prefix = 'data:image/png;base64,';
+        if (!dataUrl || !dataUrl.startsWith(prefix)) return;
+        const uri = await vscode.window.showSaveDialog({ filters: { 'PNG Image': ['png'] }, saveLabel: 'Export PNG' });
+        if (!uri) return;
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(dataUrl.slice(prefix.length), 'base64'));
+        vscode.window.showInformationMessage(`Exported to ${uri.fsPath}`);
     }
 
     private async handleExportToFile(content: string, extension: string, filterLabel: string): Promise<void> {
