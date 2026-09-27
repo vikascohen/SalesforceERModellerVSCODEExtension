@@ -5,9 +5,12 @@
             "name": "Run Extension",
             "type": "extensionHost",
             "request": "launch",
-            "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--disable-extensions"
+            ],
             "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-            "preLaunchTask": "npm: compile"
+            "preLaunchTask": "npm: bundle"
         }
     ]
 }
