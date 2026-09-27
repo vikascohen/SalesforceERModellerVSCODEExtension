@@ -52,6 +52,7 @@ const saveAsBtn = document.getElementById('saveAsBtn');
 const exportMermaidBtn = document.getElementById('exportMermaidBtn');
 const exportDrawioBtn = document.getElementById('exportDrawioBtn');
 const focusToggle = document.getElementById('focusToggle');
+const zoomOutBtn=document.getElementById('zoomOutBtn'),zoomResetBtn=document.getElementById('zoomResetBtn'),zoomInBtn=document.getElementById('zoomInBtn'),autoLayoutBtn=document.getElementById('autoLayoutBtn');
 const mimicBtn=document.getElementById('mimicBtn'),mimicModal=document.getElementById('mimicModal'),mimicCloseBtn=document.getElementById('mimicCloseBtn'),mimicAddObjectBtn=document.getElementById('mimicAddObjectBtn'),mimicGenerateBtn=document.getElementById('mimicGenerateBtn'),mimicModelName=document.getElementById('mimicModelName'),mimicBody=document.getElementById('mimicBody'),mimicError=document.getElementById('mimicError'),exportPngBtn=document.getElementById('exportPngBtn'),dictionaryCsvBtn=document.getElementById('dictionaryCsvBtn');
 const architectureBtn=document.getElementById('architectureBtn'),architecturePanel=document.getElementById('architecturePanel'),architectureBody=document.getElementById('architectureBody'),architectureCloseBtn=document.getElementById('architectureCloseBtn'),architectureRefreshBtn=document.getElementById('architectureRefreshBtn');
 
@@ -60,6 +61,7 @@ let renderTimer = null;
 let lastModel = null;
 let dirty = false;
 let focusedEntity = null;
+let erPositions={},boxHeightOverrides={},boxWidthOverrides={},zoomLevel=1,dragState=null,resizeState=null;
 let allObjectNames = [];
 
 // DSL editor intellisense state — separate from the import-panel's own
@@ -172,6 +174,8 @@ async function init() {
     exportDrawioBtn.addEventListener('click', doExportDrawio);
     exportPngBtn.addEventListener('click', doExportPng);
     focusToggle.addEventListener('change', () => { focusedEntity = null; render(); });
+    zoomOutBtn.addEventListener('click',()=>setZoom(zoomLevel-0.1)); zoomInBtn.addEventListener('click',()=>setZoom(zoomLevel+0.1)); zoomResetBtn.addEventListener('click',()=>setZoom(1));
+    autoLayoutBtn.addEventListener('click',()=>{erPositions={};boxHeightOverrides={};boxWidthOverrides={};render();});
     canvas.addEventListener('click', onCanvasClick);
 
     window.addEventListener('keydown', (e) => {
@@ -911,7 +915,7 @@ function doExportMermaid() {
 
 function doExportDrawio() {
     if (!lastModel) { setStatus('Nothing to export yet.', true); return; }
-    const geo = buildErGeometry(lastModel, {}, {}, {});
+    const geo = buildErGeometry(lastModel, erPositions, boxHeightOverrides, boxWidthOverrides);
     const xml = buildDrawioXml(lastModel, geo.boxes);
     vscode.postMessage({ type: 'exportDrawioToFile', text: xml });
 }
@@ -932,7 +936,7 @@ function render() {
     try {
         const model = parseEr(text);
         lastModel = model;
-        const geo = buildErGeometry(model, {}, {}, {});
+        const geo = buildErGeometry(model, erPositions, boxHeightOverrides, boxWidthOverrides);
         drawGeometry(geo);
         requestSharingAndHeatmapData();
         scheduleRelationshipScan();
@@ -950,6 +954,8 @@ function onCanvasClick(e) {
     render();
 }
 
+function setZoom(value){zoomLevel=Math.max(0.4,Math.min(2,Math.round(value*10)/10));zoomResetBtn.textContent=Math.round(zoomLevel*100)+'%';canvas.style.transform='scale('+zoomLevel+')';canvas.style.transformOrigin='0 0';}
+function svgPoint(e){const rect=canvas.getBoundingClientRect();return{x:(e.clientX-rect.left)/zoomLevel,y:(e.clientY-rect.top)/zoomLevel};}
 function drawGeometry(geo) {
     // Real bug this avoids, found during review rather than reported:
     // scheduleRender's debounce (300ms) is shorter than the hover show
@@ -969,6 +975,7 @@ function drawGeometry(geo) {
     canvas.setAttribute('width', String(geo.svgWidth));
     canvas.setAttribute('height', String(geo.svgHeight));
     canvas.innerHTML = '';
+    setZoom(zoomLevel);
 
     const defs = document.createElementNS(SVG_NS, 'defs');
     canvas.appendChild(defs);
@@ -1013,7 +1020,10 @@ function drawGeometry(geo) {
         const g = document.createElementNS(SVG_NS, 'g');
         g.setAttribute('data-entity', b.name);
         g.setAttribute('opacity', dimmed ? '0.2' : '1');
-        g.style.cursor = focusToggle.checked ? 'pointer' : 'default';
+        g.style.cursor = 'move';
+        g.addEventListener('pointerdown',(e)=>{if(e.target.dataset.resize==='1')return;const p=svgPoint(e);dragState={name:b.name,dx:p.x-b.x,dy:p.y-b.y};g.setPointerCapture?.(e.pointerId);e.preventDefault();});
+        g.addEventListener('pointermove',(e)=>{if(!dragState||dragState.name!==b.name)return;const p=svgPoint(e);erPositions[b.name]={x:Math.max(0,p.x-dragState.dx),y:Math.max(0,p.y-dragState.dy)};render();});
+        g.addEventListener('pointerup',()=>{dragState=null;});
 
         g.addEventListener('mouseenter', (e) => {
             const clientX = e.clientX;
@@ -1113,6 +1123,7 @@ function drawGeometry(geo) {
             g.appendChild(more);
         }
 
+        const handle=document.createElementNS(SVG_NS,'rect');handle.dataset.resize='1';handle.setAttribute('x',String(b.x+b.width-8));handle.setAttribute('y',String(b.y+b.height-8));handle.setAttribute('width','8');handle.setAttribute('height','8');handle.setAttribute('fill','var(--vscode-focusBorder)');handle.style.cursor='nwse-resize';handle.addEventListener('pointerdown',(e)=>{const p=svgPoint(e);resizeState={name:b.name,x:p.x,y:p.y,w:b.width,h:b.height};handle.setPointerCapture?.(e.pointerId);e.stopPropagation();});handle.addEventListener('pointermove',(e)=>{if(!resizeState||resizeState.name!==b.name)return;const p=svgPoint(e);boxWidthOverrides[b.name]=Math.max(160,resizeState.w+(p.x-resizeState.x));boxHeightOverrides[b.name]=Math.max(70,resizeState.h+(p.y-resizeState.y));render();});handle.addEventListener('pointerup',()=>{resizeState=null;});g.appendChild(handle);
         canvas.appendChild(g);
     });
 }
