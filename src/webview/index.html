@@ -32,6 +32,7 @@
         <label class="toggle"><input type="checkbox" id="sharingViewToggle"> Sharing View</label>
         <span class="sep"></span>
         <button id="compareOrgBtn" title="Compare the DSL against the current org schema for every entity on canvas">Compare with Org</button>
+        <button id="architectureBtn" title="Topology, impact, paths and junction intelligence">Architecture Intelligence</button>
         <button id="paletteToggleBtn" title="Show a searchable, drag-and-drop object palette">Object Palette</button>
         <span class="status" id="statusText"></span>
     </div>
@@ -72,6 +73,12 @@
             </div>
             <div id="dictionaryTableWrap" class="dictionary-table-wrap"></div>
         </div>
+    </div>
+
+    <div id="architecturePanel" class="architecture-panel" hidden>
+        <div class="architecture-header"><div><strong>Architecture Intelligence</strong><div class="architecture-sub">Evidence from the current ER model. No security scoring or invented runtime dependencies.</div></div><button id="architectureRefreshBtn">Refresh</button><button id="architectureCloseBtn">✕</button></div>
+        <div class="architecture-tabs"><button data-arch-tab="overview" class="active">Overview</button><button data-arch-tab="object">Object Map & Impact</button><button data-arch-tab="path">Path Finder</button><button data-arch-tab="usage">Change Readiness</button><button data-arch-tab="relationships">Relationship Insights</button><button data-arch-tab="junctions">Junction Intelligence</button></div>
+        <div id="architectureBody" class="architecture-body"></div>
     </div>
 
     <div id="driftModal" class="drift-modal" hidden>
