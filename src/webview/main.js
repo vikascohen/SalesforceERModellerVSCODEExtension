@@ -177,6 +177,8 @@ async function init() {
     zoomOutBtn.addEventListener('click',()=>setZoom(zoomLevel-0.1)); zoomInBtn.addEventListener('click',()=>setZoom(zoomLevel+0.1)); zoomResetBtn.addEventListener('click',()=>setZoom(1));
     autoLayoutBtn.addEventListener('click',()=>{erPositions={};boxHeightOverrides={};boxWidthOverrides={};render();});
     canvas.addEventListener('click', onCanvasClick);
+    window.addEventListener('pointermove',(e)=>{if(dragState){const p=svgPoint(e);erPositions[dragState.name]={x:Math.max(0,p.x-dragState.dx),y:Math.max(0,p.y-dragState.dy)};render();}else if(resizeState){const p=svgPoint(e);boxWidthOverrides[resizeState.name]=Math.max(160,resizeState.w+(p.x-resizeState.x));boxHeightOverrides[resizeState.name]=Math.max(70,resizeState.h+(p.y-resizeState.y));render();}});
+    window.addEventListener('pointerup',()=>{dragState=null;resizeState=null;});
 
     window.addEventListener('keydown', (e) => {
         const mod = e.ctrlKey || e.metaKey;
@@ -1022,8 +1024,7 @@ function drawGeometry(geo) {
         g.setAttribute('opacity', dimmed ? '0.2' : '1');
         g.style.cursor = 'move';
         g.addEventListener('pointerdown',(e)=>{if(e.target.dataset.resize==='1')return;const p=svgPoint(e);dragState={name:b.name,dx:p.x-b.x,dy:p.y-b.y};g.setPointerCapture?.(e.pointerId);e.preventDefault();});
-        g.addEventListener('pointermove',(e)=>{if(!dragState||dragState.name!==b.name)return;const p=svgPoint(e);erPositions[b.name]={x:Math.max(0,p.x-dragState.dx),y:Math.max(0,p.y-dragState.dy)};render();});
-        g.addEventListener('pointerup',()=>{dragState=null;});
+
 
         g.addEventListener('mouseenter', (e) => {
             const clientX = e.clientX;
@@ -1123,7 +1124,7 @@ function drawGeometry(geo) {
             g.appendChild(more);
         }
 
-        const handle=document.createElementNS(SVG_NS,'rect');handle.dataset.resize='1';handle.setAttribute('x',String(b.x+b.width-8));handle.setAttribute('y',String(b.y+b.height-8));handle.setAttribute('width','8');handle.setAttribute('height','8');handle.setAttribute('fill','var(--vscode-focusBorder)');handle.style.cursor='nwse-resize';handle.addEventListener('pointerdown',(e)=>{const p=svgPoint(e);resizeState={name:b.name,x:p.x,y:p.y,w:b.width,h:b.height};handle.setPointerCapture?.(e.pointerId);e.stopPropagation();});handle.addEventListener('pointermove',(e)=>{if(!resizeState||resizeState.name!==b.name)return;const p=svgPoint(e);boxWidthOverrides[b.name]=Math.max(160,resizeState.w+(p.x-resizeState.x));boxHeightOverrides[b.name]=Math.max(70,resizeState.h+(p.y-resizeState.y));render();});handle.addEventListener('pointerup',()=>{resizeState=null;});g.appendChild(handle);
+        const handle=document.createElementNS(SVG_NS,'rect');handle.dataset.resize='1';handle.setAttribute('x',String(b.x+b.width-8));handle.setAttribute('y',String(b.y+b.height-8));handle.setAttribute('width','8');handle.setAttribute('height','8');handle.setAttribute('fill','var(--vscode-focusBorder)');handle.style.cursor='nwse-resize';handle.addEventListener('pointerdown',(e)=>{const p=svgPoint(e);resizeState={name:b.name,x:p.x,y:p.y,w:b.width,h:b.height};handle.setPointerCapture?.(e.pointerId);e.stopPropagation();});g.appendChild(handle);
         canvas.appendChild(g);
     });
 }
