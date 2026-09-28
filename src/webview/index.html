@@ -53,6 +53,9 @@
             <div id="paletteList" class="palette-list"></div>
         </div>
         <div class="canvas-wrap">
+            <div class="canvas-controls"><button id="canvasMaxBtn">Maximise Canvas</button><button id="fitModelBtn">Fit Model</button><button id="canvasSummaryBtn">Show Summary</button></div>
+            <div id="canvasSummary" class="canvas-summary" hidden></div>
+            <div class="relationship-legend"><strong>Relationships</strong><span><i class="legend-line master"></i>Master Detail</span><span><i class="legend-line lookup"></i>Lookup</span><span><i class="legend-line poly"></i>Polymorphic</span></div>
             <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
             <div id="hoverCard" class="hover-card" hidden></div>
             <div id="linterPanel" class="linter-panel" hidden>
