@@ -17,6 +17,8 @@ const vscode = acquireVsCodeApi();
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const editor = document.getElementById('dslEditor');
+const dslEditorWrap = document.querySelector('.dsl-editor-wrap');
+const dslExpandBtn = document.getElementById('dslExpandBtn');
 const canvas = document.getElementById('canvas');
 const statusText = document.getElementById('statusText');
 const importBtn = document.getElementById('importBtn');
@@ -161,6 +163,7 @@ async function init() {
     document.querySelectorAll('[data-arch-tab]').forEach(btn=>btn.addEventListener('click',()=>{architectureTab=btn.dataset.archTab;document.querySelectorAll('[data-arch-tab]').forEach(b=>b.classList.toggle('active',b===btn));renderArchitecture();}));
     driftCloseBtn.addEventListener('click', closeDriftModal);
     paletteToggleBtn.addEventListener('click', togglePalette);
+    dslExpandBtn.addEventListener('click', () => { const expanded = dslEditorWrap.classList.toggle('expanded'); dslExpandBtn.textContent = expanded ? 'Restore' : 'Expand'; dslExpandBtn.title = expanded ? 'Restore split view' : 'Expand DSL editor'; });
     paletteSearch.addEventListener('input', renderPaletteList);
     canvas.parentElement.addEventListener('dragover', handleCanvasDragOver);
     canvas.parentElement.addEventListener('dragleave', handleCanvasDragLeave);
@@ -185,6 +188,9 @@ async function init() {
 
     window.addEventListener('message', handleExtensionMessage);
     vscode.postMessage({ type: 'ready' });
+    // The object palette is part of the primary modelling workflow, not a hidden secondary tool.
+    if (allObjectNames.length === 0) vscode.postMessage({ type: 'requestObjectList' });
+    renderPaletteList();
 
     render();
 }
