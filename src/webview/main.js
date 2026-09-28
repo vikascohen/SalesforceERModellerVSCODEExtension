@@ -202,9 +202,10 @@ async function init() {
     paletteSearch.addEventListener('input', () => {
         renderPaletteList();
         const term=paletteSearch.value.trim().toLowerCase();
-        if(term){
-            allObjectNames.filter(n=>n.toLowerCase().includes(term)).slice(0,8).forEach(prefetchPaletteDsl);
-        }
+        // Searching the palette must stay purely local. Metadata is fetched
+        // only when the user hovers/drags/imports a result; otherwise typing
+        // into Search Objects can appear frozen while sf processes start.
+
     });
     canvas.parentElement.addEventListener('dragover', handleCanvasDragOver);
     canvas.parentElement.addEventListener('dragleave', handleCanvasDragLeave);
@@ -1361,12 +1362,8 @@ function handleExtensionMessage(event) {
         allObjectNames = msg.names || [];
         renderSuggestions();
         renderPaletteList();
-        // Preload a bounded set of the palette in the background. The first
-        // objects users see are ready before a drag begins, so drop itself is
-        // local DSL insertion rather than a metadata operation.
-        const warm=()=>allObjectNames.slice(0,24).forEach(prefetchPaletteDsl);
-        if (typeof requestIdleCallback === 'function') requestIdleCallback(warm,{timeout:1000});
-        else setTimeout(warm,100);
+        // Do not automatically describe palette entries here. Object-list search
+        // is local and should remain instant; definitions are loaded on demand.
     } else if (msg.type === 'entityFields') {
         const key = (msg.entityName || '').toLowerCase();
         objectFieldsCache[key] = msg.fields || [];
