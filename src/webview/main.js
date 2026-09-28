@@ -10,6 +10,8 @@ import { scanForMissingRelationships } from './relationshipLinter.js';
 import { computeSchemaDrift } from './schemaDrift.js';
 import { analyseArchitecture, analyseObject, findArchitecturePath, analyseBlastRadius, detectJunctionObjects, analyseDomains } from './architectureIntelligence.js';
 
+const bootDiagnostic = document.getElementById('bootDiagnostic');
+if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime: bundle executing';
 const vscode = acquireVsCodeApi();
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -115,11 +117,14 @@ function injectDefs(defsEl) {
 }
 
 async function init() {
+    if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime: init started';
     // window.__LOGIC_URI__ is set by an inline script in index.html --
     // a webview's asWebviewUri() result isn't known until the extension
     // host renders the HTML, so a static import path can't reference it;
     // this loads it as a dynamic import instead.
+    if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime: loading diagram engine';
     const logic = await import(window.__LOGIC_URI__);
+    if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime: diagram engine loaded';
     parseEr = logic.parseEr;
     buildErGeometry = logic.buildErGeometry;
     buildMermaidErDiagram = logic.buildMermaidErDiagram;
@@ -1234,4 +1239,4 @@ function setStatus(text, isError) {
     statusText.style.color = isError ? 'var(--vscode-errorForeground)' : '';
 }
 
-init();
+init().then(() => { if (bootDiagnostic) { bootDiagnostic.textContent = 'ER runtime: READY'; setTimeout(() => bootDiagnostic.remove(), 2500); } }).catch((e) => { if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime ERROR: ' + (e && e.message ? e.message : String(e)); console.error(e); });
