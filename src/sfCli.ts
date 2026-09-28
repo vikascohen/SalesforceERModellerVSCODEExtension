@@ -236,43 +236,30 @@ export interface FieldUsageStats {
  */
 export async function getFieldUsageStats(objectApiName: string, fieldApiNames: string[]): Promise<FieldUsageStats> {
     const percentages: Record<string, number> = {};
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(objectApiName)) {
-        return { percentages, totalRecords: 0, error: 'Invalid object name.' };
-    }
-
-    let totalRecords: number;
-    try {
-        totalRecords = await getRecordCount(objectApiName);
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return { percentages, totalRecords: 0, error: `Could not count records: ${msg}` };
-    }
-
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(objectApiName)) return { percentages, totalRecords: 0, error: 'Invalid object name.' };
     const safeFields = fieldApiNames.filter((f) => /^[A-Za-z][A-Za-z0-9_]*$/.test(f));
-    if (totalRecords === 0 || safeFields.length === 0) {
-        safeFields.forEach((f) => { percentages[f] = 0; });
-        return { percentages, totalRecords };
-    }
+    if (!safeFields.length) return { percentages, totalRecords: 0 };
 
-    const batchSize = 15;
-    for (let i = 0; i < safeFields.length; i += batchSize) {
-        const batch = safeFields.slice(i, i + batchSize);
-        try {
-            const selectParts = batch.map((f) => `COUNT(${f})`);
-            const soql = `SELECT ${selectParts.join(', ')} FROM ${objectApiName}`;
-            const result = await runSfJson(['data', 'query', '--query', soql, '--json']);
-            const row = (result && result.records && result.records[0]) || {};
-            batch.forEach((f, idx) => {
-                const cnt = row[`expr${idx}`];
-                percentages[f] = (typeof cnt === 'number' ? cnt : 0) / totalRecords * 100;
-            });
-        } catch (e) {
-            // This batch's fields fall back to "not available" (absent
-            // from the map) rather than failing every other batch.
-        }
-    }
+    // Count once, then run independent aggregate batches concurrently.
+    // The old sequential loop multiplied sf CLI startup latency by the
+    // number of field batches on large standard objects such as Account.
+    let totalRecords:number;
+    try { totalRecords=await getRecordCount(objectApiName); }
+    catch(e){const msg=e instanceof Error?e.message:String(e);return {percentages,totalRecords:0,error:`Could not count records: ${msg}`};}
+    if(totalRecords===0){safeFields.forEach(f=>percentages[f]=0);return {percentages,totalRecords};}
 
-    return { percentages, totalRecords };
+    const batchSize=15,batches:string[][]=[];
+    for(let i=0;i<safeFields.length;i+=batchSize)batches.push(safeFields.slice(i,i+batchSize));
+    const results=await Promise.all(batches.map(async batch=>{
+        try{
+            const soql=`SELECT ${batch.map(f=>`COUNT(${f})`).join(', ')} FROM ${objectApiName}`;
+            const result=await runSfJson(['data','query','--query',soql,'--json']);
+            const row=(result&&result.records&&result.records[0])||{};
+            return batch.map((f,idx)=>[f,typeof row[`expr${idx}`]==='number'?row[`expr${idx}`]/totalRecords*100:null] as const);
+        }catch{return batch.map(f=>[f,null] as const);}
+    }));
+    results.flat().forEach(([field,pct])=>{if(pct!=null)percentages[field]=pct;});
+    return {percentages,totalRecords};
 }
 
 export interface SharingModelInfo {
