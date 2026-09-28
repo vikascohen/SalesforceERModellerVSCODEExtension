@@ -1289,6 +1289,8 @@ function handleExtensionMessage(event) {
     } else if (msg.type === 'saved') {
         dirty = false;
         setStatus('Saved.');
+    } else if (msg.type === 'fileNameChanged') {
+        if (diagramFileName) diagramFileName.textContent = msg.fileName || 'Untitled Diagram';
     } else if (msg.type === 'orgChanged') {
         setStatus(msg.org ? `Connected: ${msg.org.alias || msg.org.username}` : 'No org selected.');
     } else if (msg.type === 'objectList') {
