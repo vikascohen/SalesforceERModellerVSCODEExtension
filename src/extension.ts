@@ -311,35 +311,27 @@ class ErModellerPanel {
 
     private async handleRequestDictionaryForObject(entityName: string): Promise<void> {
         try {
-            const [raw, descriptions] = await Promise.all([
-                describeObject(entityName),
-                getFieldDescriptions(entityName).catch(() => [])
-            ]);
+            // Render the useful schema immediately. FieldDefinition descriptions
+            // are enrichment and must never block the whole right-hand pane.
+            const raw = await describeObject(entityName);
             const classified = classifyDescribe(raw);
-            const descByField: Record<string, { description: string | null; lastModifiedDate: string | null }> = {};
-            descriptions.forEach((d) => { descByField[d.apiName] = d; });
+            const coreFields = classified.fields.map((f) => ({ ...f, isPrimaryKey: f.apiName === 'Id', description: null, lastModifiedDate: null, percentUsed: f.apiName === 'Id' ? 100 : null }));
+            const baseRow = { apiName: classified.apiName, label: classified.label, isCustom: classified.isCustom, fields: coreFields };
+            this.panel.webview.postMessage({ type: 'dictionaryRow', row: baseRow, partial: true });
 
-            const fields = classified.fields.map((f) => {
-                const isPrimaryKey = f.apiName === 'Id';
-                const desc = descByField[f.apiName];
-                return {
-                    ...f,
-                    isPrimaryKey,
-                    description: desc ? desc.description : null,
-                    lastModifiedDate: desc ? desc.lastModifiedDate : null,
-                    percentUsed: isPrimaryKey ? 100 : null
-                };
-            });
-
-            this.panel.webview.postMessage({
-                type: 'dictionaryRow',
-                row: { apiName: classified.apiName, label: classified.label, isCustom: classified.isCustom, fields }
+            getFieldDescriptions(entityName).then((descriptions) => {
+                const descByField: Record<string, { description: string | null; lastModifiedDate: string | null }> = {};
+                descriptions.forEach((d) => { descByField[d.apiName] = d; });
+                const fields = coreFields.map((f) => {
+                    const desc = descByField[f.apiName];
+                    return { ...f, description: desc ? desc.description : null, lastModifiedDate: desc ? desc.lastModifiedDate : null };
+                });
+                this.panel.webview.postMessage({ type: 'dictionaryRow', row: { ...baseRow, fields }, partial: false });
+            }).catch(() => {
+                this.panel.webview.postMessage({ type: 'dictionaryEnrichmentComplete', entityName });
             });
         } catch (e) {
-            this.panel.webview.postMessage({
-                type: 'dictionaryError',
-                message: e instanceof SfCliError ? e.message : (e instanceof Error ? e.message : String(e))
-            });
+            this.panel.webview.postMessage({ type: 'dictionaryError', message: e instanceof SfCliError ? e.message : (e instanceof Error ? e.message : String(e)) });
         }
     }
 
