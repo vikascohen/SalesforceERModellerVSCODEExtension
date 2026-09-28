@@ -79,6 +79,7 @@ let focusedEntity = null;
 let erPositions={},boxHeightOverrides={},boxWidthOverrides={},zoomLevel=1,dragState=null,resizeState=null,legendDragState=null;
 let allObjectNames = [];
 const pendingPaletteDrops = new Set();
+const pendingPaletteDropPositions = new Map();
 
 // DSL editor intellisense state — separate from the import-panel's own
 // object-name autocomplete (suggestDropdown/allObjectNames above, which
@@ -927,10 +928,10 @@ function handleCanvasDrop(e) {
     canvas.parentElement.classList.remove('drag-over');
     const name = e.dataTransfer.getData('text/plain');
     if (!name) return;
-    addEntityByDrop(name);
+    addEntityByDrop(name, svgPoint(e));
 }
 
-function addEntityByDrop(name) {
+function addEntityByDrop(name, dropPoint) {
     let existingNames = [];
     if (editor.value.trim()) {
         try { existingNames = parseEr(editor.value).entities.map((e) => e.name); } catch (e) { /* mid-typing / invalid DSL */ }
@@ -938,6 +939,10 @@ function addEntityByDrop(name) {
     if (existingNames.some((n) => n.toLowerCase() === name.toLowerCase())) return; // already on canvas
     if (pendingPaletteDrops.has(name.toLowerCase())) return;
     pendingPaletteDrops.add(name.toLowerCase());
+    if (dropPoint) {
+        erPositions[name] = { x: Math.max(0, dropPoint.x - 100), y: Math.max(0, dropPoint.y - 18) };
+        pendingPaletteDropPositions.set(name.toLowerCase(), name);
+    }
     setStatus('Loading ' + name + '...');
     vscode.postMessage({ type: 'importFromOrg', names: [name] });
 }
@@ -1218,6 +1223,7 @@ function handleExtensionMessage(event) {
     const msg = event.data;
     if (msg.type === 'appendDsl') {
         pendingPaletteDrops.clear();
+        pendingPaletteDropPositions.clear();
         editor.value = editor.value.trim() ? editor.value.trimEnd() + '\n\n' + msg.dsl : msg.dsl;
         markDirty();
         render();
@@ -1228,6 +1234,8 @@ function handleExtensionMessage(event) {
         render();
         setStatus('Opened.');
     } else if (msg.type === 'importError') {
+        pendingPaletteDropPositions.forEach((originalName) => delete erPositions[originalName]);
+        pendingPaletteDropPositions.clear();
         pendingPaletteDrops.clear();
         setStatus(msg.message, true);
     } else if (msg.type === 'saved') {
