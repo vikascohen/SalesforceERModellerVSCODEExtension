@@ -426,9 +426,8 @@ body.dsl-fullscreen > .main > .dsl-editor-wrap.expanded { display:flex !importan
     cursor: grab;
 }
 
-.palette-item:hover {
-    background: var(--vscode-list-hoverBackground);
-}
+.palette-item:hover { background: var(--vscode-list-hoverBackground); }
+.palette-item.dragging { cursor:grabbing; opacity:.65; background:var(--vscode-list-activeSelectionBackground,var(--vscode-list-hoverBackground)); }
 
 .canvas-wrap.drag-over {
     outline: 2px dashed var(--vscode-focusBorder);
