@@ -108,6 +108,7 @@ let dismissedSuggestionKeys = new Set();
 let relScanTimer = null;
 
 let driftResults = [];
+let architectureSourceText='';
 let architectureAnalysis=null,architectureTab='overview',architectureObject='',architecturePathSource='',architecturePathTarget='',architectureDomainAssignments={};
 let mimicObjects=[],mimicSeq=0;
 
@@ -430,8 +431,8 @@ function handleDslEditorKeyDown(e) {
 
 
 function archEsc(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-function openArchitecture(){architecturePanel.hidden=false;refreshArchitecture();}
-function refreshArchitecture(){try{architectureAnalysis=analyseArchitecture(parseEr(editor.value||''));const n=architectureAnalysis.nodes;if(!architectureObject&&n.length)architectureObject=n[0].name;if(!architecturePathSource&&n.length)architecturePathSource=n[0].name;if(!architecturePathTarget&&n.length>1)architecturePathTarget=n[1].name;renderArchitecture();}catch(e){architectureAnalysis=null;architectureBody.innerHTML='<div class="arch-card"><strong>Analysis unavailable</strong><div class="arch-muted">'+archEsc(e.message||e)+'</div></div>';}}
+function openArchitecture(){architecturePanel.hidden=false;if(architectureAnalysis&&architectureSourceText===editor.value){renderArchitecture();return;}refreshArchitecture();}
+function refreshArchitecture(){try{const source=editor.value||'';architectureAnalysis=analyseArchitecture(parseEr(source));architectureSourceText=source;const n=architectureAnalysis.nodes;if(!architectureObject&&n.length)architectureObject=n[0].name;if(!architecturePathSource&&n.length)architecturePathSource=n[0].name;if(!architecturePathTarget&&n.length>1)architecturePathTarget=n[1].name;renderArchitecture();}catch(e){architectureAnalysis=null;architectureBody.innerHTML='<div class="arch-card"><strong>Analysis unavailable</strong><div class="arch-muted">'+archEsc(e.message||e)+'</div></div>';}}
 function archOptions(s){return(architectureAnalysis?.nodes||[]).map(n=>'<option value="'+archEsc(n.name)+'"'+(n.name===s?' selected':'')+'>'+archEsc(n.name)+'</option>').join('');}
 function renderArchitecture(){const a=architectureAnalysis;if(!a)return;
  if(architectureTab==='overview'){const metrics=[['Objects',a.entityCount],['Fields',a.fieldCount],['Relationships',a.relationshipCount],['Components',a.componentCount],['Max depth',a.maxRelationshipDepth],['Density',a.relationshipDensity],['Custom objects',a.customObjectCount],['Cycles',a.cycles.length]];architectureBody.innerHTML='<div class="arch-metrics">'+metrics.map(x=>'<div class="arch-metric"><div class="arch-muted">'+x[0]+'</div><div class="arch-metric-value">'+x[1]+'</div></div>').join('')+'</div><div class="arch-grid"><div class="arch-card"><strong>Most connected</strong><ul class="arch-list">'+a.mostConnected.map(n=>'<li>'+archEsc(n.name)+' · '+n.degree+' relationships</li>').join('')+'</ul></div><div class="arch-card"><strong>Isolated objects</strong><ul class="arch-list">'+(a.islands.length?a.islands.map(n=>'<li>'+archEsc(n.name)+'</li>').join(''):'<li>None</li>')+'</ul></div><div class="arch-card"><strong>Architecture observations</strong><ul class="arch-list">'+(a.observations.length?a.observations.map(o=>'<li><strong>'+archEsc(o.title)+'</strong>: '+archEsc(o.detail)+'</li>').join(''):'<li>None</li>')+'</ul></div><div class="arch-card"><strong>Relationship mix</strong><div>Lookup: '+a.lookupCount+'</div><div>Master Detail: '+a.masterDetailCount+'</div><div>Polymorphic: '+a.polymorphicCount+'</div><div>Parallel: '+a.parallelRelationshipCount+'</div></div></div>';return;}
