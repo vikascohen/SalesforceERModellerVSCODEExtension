@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import ExcelJS from 'exceljs';
 import {
     describeObject,
+    describeAllObjectsBulk,
     listAllObjectNames,
     getTargetOrg,
     listAuthenticatedOrgs,
@@ -267,26 +268,15 @@ class ErModellerPanel {
             return;
         }
         try{
-            const names=await listAllObjectNames();
+            this.panel.webview.postMessage({type:'objectDefinitionsProgress',completed:0,total:1});
+            const objects=await describeAllObjectsBulk();
             let completed=0;
-            const failures:string[]=[];
-            let cursor=0;
-            const worker=async()=>{
-                while(true){
-                    const index=cursor++;
-                    if(index>=names.length)return;
-                    const name=names[index];
-                    try{await this.getPaletteDsl(name);}catch{failures.push(name);}
-                    completed++;
-                    if(completed===names.length || completed%5===0){
-                        this.panel.webview.postMessage({type:'objectDefinitionsProgress',completed,total:names.length});
-                    }
-                }
-            };
-            // A small pool keeps several independent CLI describes moving without
-            // spawning hundreds of sf processes at once.
-            await Promise.all(Array.from({length:Math.min(6,names.length)},()=>worker()));
-            this.panel.webview.postMessage({type:'objectDefinitionsLoaded',completed,total:names.length,failed:failures.length});
+            for(const raw of objects){
+                const dsl=buildErSource([classifyDescribe(raw)]);
+                this.paletteDslCache.set(raw.name.toLowerCase(),Promise.resolve(dsl));
+                completed++;
+            }
+            this.panel.webview.postMessage({type:'objectDefinitionsLoaded',completed,total:objects.length,failed:0});
         }catch(e){
             this.panel.webview.postMessage({type:'objectDefinitionsError',message:e instanceof Error?e.message:String(e)});
         }
