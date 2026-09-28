@@ -174,34 +174,25 @@ async function runSfJson(args: string[]): Promise<any> {
 }
 
 export async function describeAllObjectsBulk(): Promise<SfCliDescribe[]> {
-    // Cache warm-up must use fields supported by Tooling FieldDefinition.
-    // IsCalculated/IsFieldDefinition are not portable query fields here.
-    const records = await runSoqlQueryViaCli(
-        "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, IsNillable FROM FieldDefinition",
-        true
-    );
-    const byEntity = new Map<string, any[]>();
-    for(const r of records){
-        const id=String(r.EntityDefinitionId||'');
-        if(!id||!r.QualifiedApiName) continue;
-        const list=byEntity.get(id)||[]; list.push(r); byEntity.set(id,list);
-    }
+    // Salesforce deliberately requires FieldDefinition queries to be scoped by
+    // a reified key (EntityDefinitionId or DurableId). There is no valid
+    // unfiltered all-fields FieldDefinition SOQL query.
+    //
+    // Use EntityDefinition only for the fast catalogue here. Exact field and
+    // relationship metadata remains lazy and comes from sobject describe when
+    // an object is actually imported.
     const entities = await runSoqlQueryViaCli(
-        "SELECT Id, QualifiedApiName, Label, IsCustom FROM EntityDefinition",
+        "SELECT DurableId, QualifiedApiName, Label, IsCustom FROM EntityDefinition",
         true
     );
-    const objects:SfCliDescribe[]=[];
-    for(const entity of entities){
-        const name=entity.QualifiedApiName, rows=byEntity.get(String(entity.Id))||[];
-        if(!name||rows.length===0) continue;
-        objects.push({name,label:entity.Label||name,custom:!!entity.IsCustom,fields:rows.map((r:any)=>({
-            name:r.QualifiedApiName,label:r.Label||r.QualifiedApiName,type:String(r.DataType||'').toLowerCase(),
-            custom:String(r.QualifiedApiName).endsWith('__c'),nillable:!!r.IsNillable,createable:true,
-            calculated:false,calculatedFormula:null,cascadeDelete:false,relationshipOrder:null,
-            referenceTo:[],relationshipName:null
-        }))});
-    }
-    return objects;
+    return entities
+        .filter((entity:any)=>entity.QualifiedApiName)
+        .map((entity:any)=>({
+            name:String(entity.QualifiedApiName),
+            label:String(entity.Label||entity.QualifiedApiName),
+            custom:!!entity.IsCustom,
+            fields:[]
+        }));
 }
 
 export async function describeObject(apiName: string): Promise<SfCliDescribe> {
