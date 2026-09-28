@@ -188,6 +188,9 @@ class ErModellerPanel {
             case 'importFromOrg':
                 await this.handleImportFromOrg(msg.names as string[]);
                 return;
+            case 'prefetchPaletteObject':
+                await this.handlePrefetchPaletteObject(msg.name as string);
+                return;
             case 'requestObjectList':
                 await this.handleRequestObjectList();
                 return;
@@ -250,6 +253,18 @@ class ErModellerPanel {
             case 'ready':
                 this.notifyOrgChanged();
                 return;
+        }
+    }
+
+    private async handlePrefetchPaletteObject(name: string): Promise<void> {
+        const clean=(name||'').trim();
+        if(!clean||!this.currentOrg)return;
+        try{
+            const dsl=buildErSource([classifyDescribe(await describeObject(clean))]);
+            this.panel.webview.postMessage({type:'paletteObjectReady',name:clean,dsl});
+        }catch{
+            // Prefetch is opportunistic. A real drop still uses the normal
+            // import path so an error is surfaced only when the user acts.
         }
     }
 
