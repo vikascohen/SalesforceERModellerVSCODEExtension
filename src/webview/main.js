@@ -20,6 +20,11 @@ const editor = document.getElementById('dslEditor');
 const dslEditorWrap = document.querySelector('.dsl-editor-wrap');
 const dslExpandBtn = document.getElementById('dslExpandBtn');
 const canvas = document.getElementById('canvas');
+const canvasWrap = canvas.parentElement;
+const fitModelBtn = document.getElementById('fitModelBtn');
+const canvasMaxBtn = document.getElementById('canvasMaxBtn');
+const canvasSummaryBtn = document.getElementById('canvasSummaryBtn');
+const canvasSummary = document.getElementById('canvasSummary');
 const statusText = document.getElementById('statusText');
 const importBtn = document.getElementById('importBtn');
 const importNames = document.getElementById('importNames');
@@ -174,6 +179,9 @@ async function init() {
     exportDrawioBtn.addEventListener('click', doExportDrawio);
     exportPngBtn.addEventListener('click', doExportPng);
     focusToggle.addEventListener('change', () => { focusedEntity = null; render(); });
+    fitModelBtn.addEventListener('click', fitModel);
+    canvasMaxBtn.addEventListener('click', () => { const on=canvasWrap.classList.toggle('maximised'); canvasMaxBtn.textContent=on?'Restore Canvas':'Maximise Canvas'; setTimeout(fitModel,0); });
+    canvasSummaryBtn.addEventListener('click', () => { canvasSummary.hidden=!canvasSummary.hidden; canvasSummaryBtn.textContent=canvasSummary.hidden?'Show Summary':'Hide Summary'; renderCanvasSummary(); });
     zoomOutBtn.addEventListener('click',()=>setZoom(zoomLevel-0.1)); zoomInBtn.addEventListener('click',()=>setZoom(zoomLevel+0.1)); zoomResetBtn.addEventListener('click',()=>setZoom(1));
     autoLayoutBtn.addEventListener('click',()=>{erPositions={};boxHeightOverrides={};boxWidthOverrides={};render();});
     canvas.addEventListener('click', onCanvasClick);
@@ -945,6 +953,8 @@ function render() {
     if (!text.trim()) {
         canvas.innerHTML = '';
         lastModel = null;
+        canvasSummary.hidden = true;
+        canvasSummaryBtn.textContent = 'Show Summary';
         setStatus('');
         return;
     }
@@ -953,6 +963,7 @@ function render() {
         lastModel = model;
         const geo = buildErGeometry(model, erPositions, boxHeightOverrides, boxWidthOverrides);
         drawGeometry(geo);
+        renderCanvasSummary();
         requestSharingAndHeatmapData();
         scheduleRelationshipScan();
         setStatus('');
@@ -970,6 +981,27 @@ function onCanvasClick(e) {
 }
 
 function setZoom(value){zoomLevel=Math.max(0.4,Math.min(2,Math.round(value*10)/10));zoomResetBtn.textContent=Math.round(zoomLevel*100)+'%';canvas.style.transform='scale('+zoomLevel+')';canvas.style.transformOrigin='0 0';}
+function fitModel(){
+    if(!lastModel)return;
+    const geo=buildErGeometry(lastModel,erPositions,boxHeightOverrides,boxWidthOverrides);
+    const pad=36,w=Math.max(1,canvasWrap.clientWidth-pad),h=Math.max(1,canvasWrap.clientHeight-pad);
+    const scale=Math.min(w/Math.max(1,geo.svgWidth),h/Math.max(1,geo.svgHeight),2);
+    zoomLevel=Math.max(0.1,Math.round(scale*100)/100);
+    zoomResetBtn.textContent=Math.round(zoomLevel*100)+'%';
+    canvas.style.transform='scale('+zoomLevel+')';canvas.style.transformOrigin='0 0';
+    canvasWrap.scrollLeft=0;canvasWrap.scrollTop=0;
+}
+function renderCanvasSummary(){
+    if(!lastModel||canvasSummary.hidden)return;
+    const entities=lastModel.entities||[], rels=lastModel.relationships||[];
+    const fields=entities.reduce((n,e)=>n+(e.fields||[]).length,0);
+    const custom=entities.filter(e=>/__c$/i.test(e.name)).length;
+    const kind=r=>{const k=String(r.kind||r.type||'').toLowerCase();return k.includes('master')?'Master Detail':k.includes('poly')?'Polymorphic':'Lookup';};
+    const counts={Lookup:0,'Master Detail':0,Polymorphic:0}; rels.forEach(r=>counts[kind(r)]++);
+    canvasSummary.innerHTML='<div class="canvas-summary-head">Model Relationship Summary</div>'+
+      '<div class="canvas-summary-metrics"><span>'+entities.length+' objects</span><span>'+fields+' fields</span><span>'+rels.length+' relationships</span><span>'+custom+' custom objects</span><span>'+counts.Lookup+' lookups</span><span>'+counts['Master Detail']+' master detail</span><span>'+counts.Polymorphic+' polymorphic</span></div>'+
+      (rels.length?rels.map((r,i)=>'<div class="canvas-summary-row"><span class="canvas-summary-kind">'+escapeHtml(kind(r))+'</span><strong>'+escapeHtml(r.childEntity||r.child||'')+'</strong><span>→</span><strong>'+escapeHtml(r.parentEntity||r.parent||'')+'</strong><span class="canvas-summary-field">'+escapeHtml(r.childField||r.fieldName||r.field||'')+'</span></div>').join(''):'<div>No relationships are currently defined.</div>');
+}
 function svgPoint(e){const rect=canvas.getBoundingClientRect();return{x:(e.clientX-rect.left)/zoomLevel,y:(e.clientY-rect.top)/zoomLevel};}
 function drawGeometry(geo) {
     // Real bug this avoids, found during review rather than reported:
