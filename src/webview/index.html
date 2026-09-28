@@ -20,8 +20,7 @@
     </div>
     <div class="toolbar studio-toolbar">
         <div class="studio-menu"><button class="studio-menu-trigger">File <span>▾</span></button><div class="studio-menu-popover">
-            <button id="openBtn">Open...</button><button id="saveBtn">Save</button><button id="saveAsBtn">Save As...</button>
-            <div class="studio-menu-divider"></div><button id="exportMermaidBtn">Copy Mermaid</button><button id="exportDrawioBtn">Export draw.io</button><button id="exportPngBtn">Export PNG</button>
+            <button id="openBtn">Open...</button><button id="saveBtn">Save</button><button id="saveAsBtn">Save As...</button><button id="renameBtn">Rename...</button>\n            <div class="studio-menu-divider"></div><button id="exportMermaidBtn">Export Mermaid...</button><button id="exportDrawioBtn">Export draw.io...</button>
         </div></div>
         <div class="studio-menu"><button class="studio-menu-trigger">Diagram <span>▾</span></button><div class="studio-menu-popover">
             <button id="mimicBtn">Mimic New ER</button><button id="autoLayoutBtn">Auto Layout</button><button id="compareOrgBtn">Compare with Org</button>
@@ -41,7 +40,7 @@
         </div>
         <button id="importBtn" class="studio-primary" title="Describe these objects via the Salesforce CLI and add them to the canvas">Import from Org</button>
     </div>
-    <div class="studio-tab-bar"><div class="studio-tab active"><span class="studio-tab-dot"></span><span>Untitled Diagram</span></div><span class="studio-tab-hint">ER DSL + visual canvas</span></div>
+    <div class="studio-tab-bar"><div class="studio-tab active"><span class="studio-tab-dot"></span><span id="diagramFileName">Untitled Diagram</span></div><span class="studio-tab-hint">ER DSL + visual canvas</span></div>
     <div class="main">
         <div class="dsl-editor-wrap">
             <div class="dsl-editor-header"><span>ER DSL</span><button id="dslCollapseBtn" title="Collapse DSL editor">◀</button><button id="dslExpandBtn" title="Expand DSL editor">Expand</button></div>
@@ -54,7 +53,7 @@
             <div id="paletteList" class="palette-list"></div>
         </div>
         <div class="canvas-wrap">
-            <div class="canvas-controls"><button id="canvasMaxBtn">Maximise Canvas</button><button id="fitModelBtn">Fit Model</button><button id="canvasExportBtn">Export</button><button id="canvasSummaryBtn">Show Summary</button></div>
+            <div class="canvas-controls"><button id="canvasMaxBtn">Maximise Canvas</button><button id="fitModelBtn">Fit Model</button><button id="canvasExportBtn">Export draw.io</button><button id="canvasSummaryBtn">Show Summary</button></div>
             <div id="canvasSummary" class="canvas-summary" hidden></div>
             <div id="relationshipLegend" class="relationship-legend"><div id="legendDragHead" class="legend-drag-head"><strong>Relationships</strong><button id="legendResetBtn" title="Reset legend position">Reset</button></div><span><i class="legend-line master"></i>Master Detail</span><span><i class="legend-line lookup"></i>Lookup</span><span><i class="legend-line poly"></i>Polymorphic</span></div>
             <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
