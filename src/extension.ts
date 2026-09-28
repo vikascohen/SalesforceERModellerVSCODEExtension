@@ -306,20 +306,13 @@ class ErModellerPanel {
 
     private async handleRequestDictionaryForObject(entityName: string): Promise<void> {
         try {
-            const raw = await describeObject(entityName);
+            const [raw, descriptions] = await Promise.all([
+                describeObject(entityName),
+                getFieldDescriptions(entityName).catch(() => [])
+            ]);
             const classified = classifyDescribe(raw);
-
-            // Descriptions come from a separate Tooling API query
-            // (FieldDefinition) that needs "View Setup and Configuration" —
-            // if that's missing, fields still show without descriptions
-            // rather than failing the whole dictionary lookup.
-            let descByField: Record<string, { description: string | null; lastModifiedDate: string | null }> = {};
-            try {
-                const descs = await getFieldDescriptions(entityName);
-                descs.forEach((d) => { descByField[d.apiName] = d; });
-            } catch (e) {
-                // No descriptions available — proceed without them.
-            }
+            const descByField: Record<string, { description: string | null; lastModifiedDate: string | null }> = {};
+            descriptions.forEach((d) => { descByField[d.apiName] = d; });
 
             const fields = classified.fields.map((f) => {
                 const isPrimaryKey = f.apiName === 'Id';
@@ -329,11 +322,6 @@ class ErModellerPanel {
                     isPrimaryKey,
                     description: desc ? desc.description : null,
                     lastModifiedDate: desc ? desc.lastModifiedDate : null,
-                    // Matches the original: the Id field is always 100%
-                    // used by definition, every other field starts as
-                    // "not yet calculated" (null) until the user opts in
-                    // via Calculate Usage — this is never computed
-                    // automatically, since it scans actual record data.
                     percentUsed: isPrimaryKey ? 100 : null
                 };
             });
