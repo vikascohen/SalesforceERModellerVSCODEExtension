@@ -132,10 +132,10 @@ async function getRestSession(): Promise<{ instanceUrl:string; accessToken:strin
 }
 
 async function restQuery(soql:string, tooling=false):Promise<any[]> {
-    const session=await getRestSession();
     const base=tooling?'/services/data/v61.0/tooling/query':'/services/data/v61.0/query';
-    const response=await fetch(session.instanceUrl+base+'?q='+encodeURIComponent(soql),{headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}});
-    if(response.status===401){restSessionCache=null;throw new SfCliError('Salesforce session expired. Retry the operation.');}
+    const queryOnce=async()=>{const session=await getRestSession();return fetch(session.instanceUrl+base+'?q='+encodeURIComponent(soql),{headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}});};
+    let response=await queryOnce();
+    if(response.status===401){restSessionCache=null;response=await queryOnce();}
     if(!response.ok){const body=await response.text();throw new SfCliError(`Salesforce REST query failed (${response.status}): ${body.slice(0,300)}`);}
     const body:any=await response.json();
     return Array.isArray(body.records)?body.records:[];
@@ -178,11 +178,16 @@ export async function describeObject(apiName: string): Promise<SfCliDescribe> {
     const request=(async()=> {
         // Interactive drag/drop must not pay the sf CLI process-start cost.
         // Reuse the authenticated in-memory REST session used by Sharing/Heatmap.
-        const session=await getRestSession();
-        const response=await fetch(session.instanceUrl+'/services/data/v61.0/sobjects/'+encodeURIComponent(apiName)+'/describe',{
-            headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}
-        });
-        if(response.status===401){restSessionCache=null;throw new SfCliError('Salesforce session expired. Retry the operation.');}
+        const describeViaRest=async()=>{
+            const session=await getRestSession();
+            return fetch(session.instanceUrl+'/services/data/v61.0/sobjects/'+encodeURIComponent(apiName)+'/describe',{
+                headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}
+            });
+        };
+        let response=await describeViaRest();
+        // A token returned by sf can expire while the VS Code panel remains
+        // open. Refresh the session and replay the describe once, invisibly.
+        if(response.status===401){restSessionCache=null;response=await describeViaRest();}
         if(!response.ok){const body=await response.text();throw new SfCliError(`Could not describe ${apiName} (${response.status}): ${body.slice(0,300)}`);}
         const result:any=await response.json();
         return {
