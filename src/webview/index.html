@@ -44,10 +44,11 @@
     <div class="studio-tab-bar"><div class="studio-tab active"><span class="studio-tab-dot"></span><span>Untitled Diagram</span></div><span class="studio-tab-hint">ER DSL + visual canvas</span></div>
     <div class="main">
         <div class="dsl-editor-wrap">
-            <div class="dsl-editor-header"><span>ER DSL</span><button id="dslExpandBtn" title="Expand DSL editor">Expand</button></div>
+            <div class="dsl-editor-header"><span>ER DSL</span><button id="dslCollapseBtn" title="Collapse DSL editor">◀</button><button id="dslExpandBtn" title="Expand DSL editor">Expand</button></div>
             <textarea id="dslEditor" spellcheck="false" placeholder="entity Account : Name, Industry&#10;entity Contact : LastName&#10;Contact.AccountId -&gt; Account"></textarea>
             <div id="dslSuggestDropdown" class="suggest-dropdown" hidden></div>
         </div>
+        <button id="dslOpenBtn" class="dsl-open-rail" title="Open DSL editor" hidden>DSL ▶</button>
         <div id="objectPalette" class="object-palette">
             <input id="paletteSearch" type="text" placeholder="Search objects…">
             <div id="paletteList" class="palette-list"></div>
