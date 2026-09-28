@@ -65,6 +65,8 @@ const paletteList = document.getElementById('paletteList');
 const openBtn = document.getElementById('openBtn');
 const saveBtn = document.getElementById('saveBtn');
 const saveAsBtn = document.getElementById('saveAsBtn');
+const renameBtn = document.getElementById('renameBtn');
+const diagramFileName = document.getElementById('diagramFileName');
 const exportMermaidBtn = document.getElementById('exportMermaidBtn');
 const exportDrawioBtn = document.getElementById('exportDrawioBtn');
 const focusToggle = document.getElementById('focusToggle');
@@ -194,12 +196,12 @@ async function init() {
     canvas.parentElement.addEventListener('drop', handleCanvasDrop);
     saveBtn.addEventListener('click', doSave);
     saveAsBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestSaveAs', text: editor.value }));
+    renameBtn.addEventListener('click', () => vscode.postMessage({ type: 'requestRename' }));
     exportMermaidBtn.addEventListener('click', doExportMermaid);
     exportDrawioBtn.addEventListener('click', doExportDrawio);
-    exportPngBtn.addEventListener('click', doExportPng);
     focusToggle.addEventListener('change', () => { focusedEntity = null; render(); });
     fitModelBtn.addEventListener('click', fitModel);
-    canvasExportBtn.addEventListener('click', () => exportPngBtn.click());
+    canvasExportBtn.addEventListener('click', doExportDrawio);
     legendDragHead.addEventListener('pointerdown', (e) => { const r=relationshipLegend.getBoundingClientRect(), cr=canvasWrap.getBoundingClientRect(); legendDragState={dx:e.clientX-r.left,dy:e.clientY-r.top,cr}; e.preventDefault(); });
     legendResetBtn.addEventListener('pointerdown',e=>e.stopPropagation());
     legendResetBtn.addEventListener('click', () => { relationshipLegend.style.left='12px'; relationshipLegend.style.right='auto'; relationshipLegend.style.top='auto'; relationshipLegend.style.bottom='12px'; });
@@ -994,7 +996,7 @@ function doImport() {
 function doExportMermaid() {
     if (!lastModel) { setStatus('Nothing to export yet.', true); return; }
     const mermaid = buildMermaidErDiagram(lastModel);
-    vscode.postMessage({ type: 'exportMermaidToClipboard', text: mermaid });
+    vscode.postMessage({ type: 'exportMermaidToFile', text: mermaid });
 }
 
 function doExportDrawio() {
