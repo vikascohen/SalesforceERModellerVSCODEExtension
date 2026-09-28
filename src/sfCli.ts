@@ -173,6 +173,29 @@ async function runSfJson(args: string[]): Promise<any> {
     return parsed.result;
 }
 
+export async function describeAllObjectsBulk(): Promise<SfCliDescribe[]> {
+    // One authenticated CLI process, one Tooling API query. This replaces one
+    // sf process per object when building the explicit definition cache.
+    const soql = "SELECT EntityDefinition.QualifiedApiName, EntityDefinition.Label, EntityDefinition.IsCustom, QualifiedApiName, Label, DataType, IsNillable, IsCalculated, IsFieldDefinition FROM FieldDefinition WHERE IsFieldDefinition = true ORDER BY EntityDefinition.QualifiedApiName, QualifiedApiName";
+    const records = await runSoqlQueryViaCli(soql, true);
+    const objects = new Map<string,SfCliDescribe>();
+    for (const r of records) {
+        const entity=r.EntityDefinition||{};
+        const name=entity.QualifiedApiName;
+        if(!name||!r.QualifiedApiName) continue;
+        let obj=objects.get(name);
+        if(!obj){obj={name,label:entity.Label||name,custom:!!entity.IsCustom,fields:[]};objects.set(name,obj);}
+        const dt=String(r.DataType||'').toLowerCase();
+        obj.fields.push({
+            name:r.QualifiedApiName,label:r.Label||r.QualifiedApiName,type:dt,
+            custom:String(r.QualifiedApiName).endsWith('__c'),nillable:!!r.IsNillable,
+            createable:true,calculated:!!r.IsCalculated,calculatedFormula:null,
+            cascadeDelete:false,relationshipOrder:null,referenceTo:[],relationshipName:null
+        });
+    }
+    return [...objects.values()];
+}
+
 export async function describeObject(apiName: string): Promise<SfCliDescribe> {
     if (!/^[A-Za-z0-9_]+$/.test(apiName)) throw new SfCliError(`"${apiName}" is not a valid object API name.`);
     const key=apiName.toLowerCase(),cached=describeCache.get(key); if(cached)return cached;
