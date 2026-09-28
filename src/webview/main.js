@@ -194,7 +194,13 @@ async function init() {
     });
     dslCollapseBtn.addEventListener('click', () => { document.body.classList.remove('dsl-fullscreen'); dslEditorWrap.classList.remove('expanded'); dslEditorWrap.classList.add('collapsed'); dslOpenBtn.hidden=false; dslExpandBtn.textContent='Expand'; });
     dslOpenBtn.addEventListener('click', () => { dslEditorWrap.classList.remove('collapsed'); dslOpenBtn.hidden=true; editor.focus(); });
-    paletteSearch.addEventListener('input', renderPaletteList);
+    paletteSearch.addEventListener('input', () => {
+        renderPaletteList();
+        const term=paletteSearch.value.trim().toLowerCase();
+        if(term){
+            allObjectNames.filter(n=>n.toLowerCase().includes(term)).slice(0,8).forEach(prefetchPaletteDsl);
+        }
+    });
     canvas.parentElement.addEventListener('dragover', handleCanvasDragOver);
     canvas.parentElement.addEventListener('dragleave', handleCanvasDragLeave);
     canvas.parentElement.addEventListener('drop', handleCanvasDrop);
@@ -1325,6 +1331,13 @@ function handleExtensionMessage(event) {
     } else if (msg.type === 'objectList') {
         allObjectNames = msg.names || [];
         renderSuggestions();
+        renderPaletteList();
+        // Preload a bounded set of the palette in the background. The first
+        // objects users see are ready before a drag begins, so drop itself is
+        // local DSL insertion rather than a metadata operation.
+        const warm=()=>allObjectNames.slice(0,24).forEach(prefetchPaletteDsl);
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(warm,{timeout:1000});
+        else setTimeout(warm,100);
     } else if (msg.type === 'entityFields') {
         const key = (msg.entityName || '').toLowerCase();
         objectFieldsCache[key] = msg.fields || [];
