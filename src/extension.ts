@@ -132,6 +132,7 @@ class ErModellerPanel {
     private currentFileUri: vscode.Uri | undefined;
     private isDirty = false;
     private currentOrg: Awaited<ReturnType<typeof getTargetOrg>> = null;
+    private paletteDslCache = new Map<string, Promise<string>>();
 
     public static createOrShow(extensionUri: vscode.Uri, forceNew = false): void {
         const column = vscode.window.activeTextEditor
@@ -179,6 +180,7 @@ class ErModellerPanel {
     public notifyOrgChanged(): void {
         getTargetOrg().then((org) => {
             this.currentOrg = org;
+            this.paletteDslCache.clear();
             this.panel.webview.postMessage({ type: 'orgChanged', org });
         });
     }
@@ -256,15 +258,25 @@ class ErModellerPanel {
         }
     }
 
+    private getPaletteDsl(name:string):Promise<string> {
+        const clean=(name||'').trim(),key=clean.toLowerCase();
+        let request=this.paletteDslCache.get(key);
+        if(!request){
+            request=(async()=>buildErSource([classifyDescribe(await describeObject(clean))]))();
+            this.paletteDslCache.set(key,request);
+            request.catch(()=>this.paletteDslCache.delete(key));
+        }
+        return request;
+    }
+
     private async handlePrefetchPaletteObject(name: string): Promise<void> {
         const clean=(name||'').trim();
         if(!clean||!this.currentOrg)return;
         try{
-            const dsl=buildErSource([classifyDescribe(await describeObject(clean))]);
+            const dsl=await this.getPaletteDsl(clean);
             this.panel.webview.postMessage({type:'paletteObjectReady',name:clean,dsl});
         }catch{
-            // Prefetch is opportunistic. A real drop still uses the normal
-            // import path so an error is surfaced only when the user acts.
+            // Opportunistic only; an actual import reports its own error.
         }
     }
 
@@ -286,9 +298,19 @@ class ErModellerPanel {
             // sf CLI startup is the dominant cost here. Describes are
             // independent, so never serialize a multi-object drag/import.
             const described = await Promise.all(
-                cleanNames.map(async (name) => classifyDescribe(await describeObject(name)))
+                cleanNames.map(async (name) => {
+                    const cached=this.paletteDslCache.get(name.toLowerCase());
+                    if(cached) return null;
+                    return classifyDescribe(await describeObject(name));
+                })
             );
-            const dsl = buildErSource(described);
+            const pieces=await Promise.all(cleanNames.map(async (name,idx)=>{
+                const cached=this.paletteDslCache.get(name.toLowerCase());
+                if(cached) return cached;
+                const item=described[idx];
+                return item ? buildErSource([item]) : this.getPaletteDsl(name);
+            }));
+            const dsl=pieces.join('\n\n');
             this.panel.webview.postMessage({ type: 'appendDsl', dsl });
         } catch (e) {
             this.panel.webview.postMessage({
