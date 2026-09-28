@@ -228,9 +228,15 @@ class ErModellerPanel {
             case 'requestOpen':
                 await this.handleOpen();
                 return;
+            case 'requestRename':
+                await this.handleRename();
+                return;
             case 'exportMermaidToClipboard':
                 await vscode.env.clipboard.writeText(msg.text as string);
                 vscode.window.showInformationMessage('Mermaid erDiagram syntax copied to clipboard.');
+                return;
+            case 'exportMermaidToFile':
+                await this.handleExportToFile(msg.text as string, 'mmd', 'Mermaid Files');
                 return;
             case 'exportDrawioToFile':
                 await this.handleExportToFile(msg.text as string, 'drawio', 'draw.io Files');
@@ -357,6 +363,7 @@ class ErModellerPanel {
         this.isDirty = false;
         this.updateTitle();
         this.panel.webview.postMessage({ type: 'saved' });
+        this.notifyFileName();
     }
 
     private async handleSaveAs(text: string): Promise<void> {
@@ -370,6 +377,7 @@ class ErModellerPanel {
         this.isDirty = false;
         this.updateTitle();
         this.panel.webview.postMessage({ type: 'saved' });
+        this.notifyFileName();
     }
 
     private async handleOpen(): Promise<void> {
@@ -384,6 +392,23 @@ class ErModellerPanel {
         this.isDirty = false;
         this.updateTitle();
         this.panel.webview.postMessage({ type: 'loadDsl', dsl: Buffer.from(bytes).toString('utf8') });
+        this.notifyFileName();
+    }
+
+    private async handleRename(): Promise<void> {
+        if (!this.currentFileUri) { vscode.window.showInformationMessage('Save the diagram first, then rename it.'); return; }
+        const oldName = this.currentFileUri.path.split('/').pop() || 'diagram.erd';
+        const next = await vscode.window.showInputBox({ prompt: 'Rename ER diagram', value: oldName, validateInput: (v) => !v.trim() ? 'Enter a file name.' : undefined });
+        if (!next) return;
+        const newName = next.toLowerCase().endsWith('.erd') ? next : next + '.erd';
+        const target = vscode.Uri.joinPath(this.currentFileUri, '..', newName);
+        try { await vscode.workspace.fs.rename(this.currentFileUri, target, { overwrite: false }); this.currentFileUri = target; this.updateTitle(); this.notifyFileName(); vscode.window.showInformationMessage(`Renamed to ${newName}`); }
+        catch (e) { vscode.window.showErrorMessage(`Could not rename diagram: ${errorMessage(e)}`); }
+    }
+
+    private notifyFileName(): void {
+        const fileName = this.currentFileUri ? this.currentFileUri.path.split('/').pop() : 'Untitled Diagram';
+        this.panel.webview.postMessage({ type: 'fileNameChanged', fileName });
     }
 
     private async handleRequestSharingModels(entityNames: string[]): Promise<void> {
