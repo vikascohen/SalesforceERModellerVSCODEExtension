@@ -73,6 +73,7 @@ const mimicBtn=document.getElementById('mimicBtn'),mimicModal=document.getElemen
 const architectureBtn=document.getElementById('architectureBtn'),architecturePanel=document.getElementById('architecturePanel'),architectureBody=document.getElementById('architectureBody'),architectureCloseBtn=document.getElementById('architectureCloseBtn'),architectureRefreshBtn=document.getElementById('architectureRefreshBtn'),architectureExportBtn=document.getElementById('architectureExportBtn');
 
 let renderTimer = null;
+let interactionFrame = null;
 let lastModel = null;
 let dirty = false;
 let focusedEntity = null;
@@ -215,8 +216,8 @@ async function init() {
     autoLayoutBtn.addEventListener('click',()=>{erPositions={};boxHeightOverrides={};boxWidthOverrides={};render();});
     canvas.addEventListener('click', onCanvasClick);
     window.addEventListener('pointermove',(e)=>{
-        if(dragState){const p=svgPoint(e);erPositions[dragState.name]={x:Math.max(0,p.x-dragState.dx),y:Math.max(0,p.y-dragState.dy)};scheduleRender();}
-        else if(resizeState){const p=svgPoint(e);if(resizeState.mode==='width')boxWidthOverrides[resizeState.name]=Math.max(80,resizeState.w+(p.x-resizeState.x));else boxHeightOverrides[resizeState.name]=Math.max(36,resizeState.h+(p.y-resizeState.y));scheduleRender();}
+        if(dragState){const p=svgPoint(e);erPositions[dragState.name]={x:Math.max(0,p.x-dragState.dx),y:Math.max(0,p.y-dragState.dy)};scheduleInteractionRender();}
+        else if(resizeState){const p=svgPoint(e);if(resizeState.mode==='width')boxWidthOverrides[resizeState.name]=Math.max(80,resizeState.w+(p.x-resizeState.x));else boxHeightOverrides[resizeState.name]=Math.max(36,resizeState.h+(p.y-resizeState.y));scheduleInteractionRender();}
         else if(legendDragState){const x=Math.max(0,e.clientX-legendDragState.cr.left-legendDragState.dx),y=Math.max(0,e.clientY-legendDragState.cr.top-legendDragState.dy);relationshipLegend.style.left=x+'px';relationshipLegend.style.top=y+'px';relationshipLegend.style.right='auto';relationshipLegend.style.bottom='auto';}
     });
     window.addEventListener('pointerup',()=>{if(dragState||resizeState){dragState=null;resizeState=null;render();}legendDragState=null;});
@@ -1001,6 +1002,16 @@ function doExportDrawio() {
 function scheduleRender() {
     clearTimeout(renderTimer);
     renderTimer = setTimeout(render, 300);
+}
+function renderCanvasOnly(){
+    if(!lastModel)return;
+    const geo=buildErGeometry(lastModel,erPositions,boxHeightOverrides,boxWidthOverrides);
+    drawGeometry(geo);
+    renderCanvasSummary();
+}
+function scheduleInteractionRender(){
+    if(interactionFrame!==null)return;
+    interactionFrame=requestAnimationFrame(()=>{interactionFrame=null;renderCanvasOnly();});
 }
 
 function render() {
