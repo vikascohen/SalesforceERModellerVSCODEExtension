@@ -190,6 +190,9 @@ class ErModellerPanel {
             case 'importFromOrg':
                 await this.handleImportFromOrg(msg.names as string[]);
                 return;
+            case 'loadObjectDefinitions':
+                await this.handleLoadObjectDefinitions();
+                return;
             case 'prefetchPaletteObject':
                 await this.handlePrefetchPaletteObject(msg.name as string);
                 return;
@@ -255,6 +258,37 @@ class ErModellerPanel {
             case 'ready':
                 this.notifyOrgChanged();
                 return;
+        }
+    }
+
+    private async handleLoadObjectDefinitions(): Promise<void> {
+        if(!this.currentOrg){
+            this.panel.webview.postMessage({type:'objectDefinitionsError',message:'No Salesforce org selected.'});
+            return;
+        }
+        try{
+            const names=await listAllObjectNames();
+            let completed=0;
+            const failures:string[]=[];
+            let cursor=0;
+            const worker=async()=>{
+                while(true){
+                    const index=cursor++;
+                    if(index>=names.length)return;
+                    const name=names[index];
+                    try{await this.getPaletteDsl(name);}catch{failures.push(name);}
+                    completed++;
+                    if(completed===names.length || completed%5===0){
+                        this.panel.webview.postMessage({type:'objectDefinitionsProgress',completed,total:names.length});
+                    }
+                }
+            };
+            // A small pool keeps several independent CLI describes moving without
+            // spawning hundreds of sf processes at once.
+            await Promise.all(Array.from({length:Math.min(6,names.length)},()=>worker()));
+            this.panel.webview.postMessage({type:'objectDefinitionsLoaded',completed,total:names.length,failed:failures.length});
+        }catch(e){
+            this.panel.webview.postMessage({type:'objectDefinitionsError',message:e instanceof Error?e.message:String(e)});
         }
     }
 
