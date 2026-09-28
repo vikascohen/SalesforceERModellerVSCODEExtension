@@ -124,27 +124,24 @@ export async function setTargetOrg(usernameOrAlias: string): Promise<void> {
 async function getRestSession(): Promise<{ instanceUrl:string; accessToken:string }> {
     if(restSessionCache) return restSessionCache;
     restSessionCache=(async()=>{
-        // Obtain a Salesforce frontdoor session from the already authenticated CLI.
-        // This avoids treating the verbose org-display auth value as an OAuth Bearer token.
-        const result=await runSfJson(['org','open','--url-only','--json']);
-        const urlText=String(result?.url||result?.result?.url||'');
-        if(!urlText) throw new SfCliError('Could not obtain an authenticated Salesforce session.');
-        const url=new URL(urlText);
-        const sid=url.searchParams.get('sid');
-        if(!sid) throw new SfCliError('Salesforce CLI did not return a usable session.');
-        return {instanceUrl:url.origin,accessToken:sid};
+        const result=await runSfJson(['org','display','--verbose','--json']);
+        if(!result?.instanceUrl||!result?.accessToken) throw new SfCliError('Could not obtain an authenticated Salesforce REST session.');
+        return {instanceUrl:String(result.instanceUrl).replace(/\/$/,''),accessToken:String(result.accessToken)};
     })();
     try{return await restSessionCache;}catch(e){restSessionCache=null;throw e;}
 }
 
 async function restQuery(soql:string, tooling=false):Promise<any[]> {
-    const base=tooling?'/services/data/v61.0/tooling/query':'/services/data/v61.0/query';
-    const queryOnce=async()=>{const session=await getRestSession();return fetch(session.instanceUrl+base+'?q='+encodeURIComponent(soql),{headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}});};
-    let response=await queryOnce();
-    if(response.status===401){restSessionCache=null;response=await queryOnce();}
-    if(!response.ok){const body=await response.text();throw new SfCliError(`Salesforce REST query failed (${response.status}): ${body.slice(0,300)}`);}
-    const body:any=await response.json();
-    return Array.isArray(body.records)?body.records:[];
+    // Keep the CLI as the compatibility fallback. Different sf auth methods do
+    // not all expose a reusable REST bearer session to extensions.
+    try {
+        const base=tooling?'/services/data/v61.0/tooling/query':'/services/data/v61.0/query';
+        const queryOnce=async()=>{const session=await getRestSession();return fetch(session.instanceUrl+base+'?q='+encodeURIComponent(soql),{headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}});};
+        let response=await queryOnce();
+        if(response.status===401){restSessionCache=null;response=await queryOnce();}
+        if(response.ok){const body:any=await response.json();return Array.isArray(body.records)?body.records:[];}
+    } catch { /* fall through to authenticated CLI */ }
+    return runSoqlQueryViaCli(soql,tooling);
 }
 
 async function runSfJson(args: string[]): Promise<any> {
@@ -178,39 +175,19 @@ async function runSfJson(args: string[]): Promise<any> {
 
 export async function describeObject(apiName: string): Promise<SfCliDescribe> {
     if (!/^[A-Za-z0-9_]+$/.test(apiName)) throw new SfCliError(`"${apiName}" is not a valid object API name.`);
-    const key=apiName.toLowerCase();
-    const cached=describeCache.get(key);
-    if(cached) return cached;
-    const request=(async()=> {
-        // Interactive drag/drop must not pay the sf CLI process-start cost.
-        // Reuse the authenticated in-memory REST session used by Sharing/Heatmap.
-        const describeViaRest=async()=>{
-            const session=await getRestSession();
-            return fetch(session.instanceUrl+'/services/data/v61.0/sobjects/'+encodeURIComponent(apiName)+'/describe',{
-                headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}
-            });
-        };
-        let response=await describeViaRest();
-        // A token returned by sf can expire while the VS Code panel remains
-        // open. Refresh the session and replay the describe once, invisibly.
-        if(response.status===401){restSessionCache=null;response=await describeViaRest();}
-        if(!response.ok){const body=await response.text();throw new SfCliError(`Could not describe ${apiName} (${response.status}): ${body.slice(0,300)}`);}
-        const result:any=await response.json();
-        return {
-            name: result.name,
-            label: result.label,
-            custom: !!result.custom,
-            fields: (result.fields || []).map((f:any)=>({
-                name:f.name,label:f.label,type:f.type,custom:!!f.custom,nillable:!!f.nillable,
-                createable:!!f.createable,calculated:!!f.calculated,calculatedFormula:f.calculatedFormula||null,
-                cascadeDelete:!!f.cascadeDelete,
-                relationshipOrder:(f.relationshipOrder===undefined||f.relationshipOrder===null)?null:f.relationshipOrder,
-                referenceTo:f.referenceTo||[],relationshipName:f.relationshipName||null
-            }))
-        };
+    const key=apiName.toLowerCase(),cached=describeCache.get(key); if(cached)return cached;
+    const request=(async()=>{
+        // The CLI is the source of truth for authentication. It works for web,
+        // JWT, SFDX URL and other sf auth methods without us handling tokens.
+        const result=await runSfJson(['sobject','describe','--sobject',apiName,'--json']);
+        return {name:result.name,label:result.label,custom:!!result.custom,fields:(result.fields||[]).map((f:any)=>({
+            name:f.name,label:f.label,type:f.type,custom:!!f.custom,nillable:!!f.nillable,createable:!!f.createable,
+            calculated:!!f.calculated,calculatedFormula:f.calculatedFormula||null,cascadeDelete:!!f.cascadeDelete,
+            relationshipOrder:(f.relationshipOrder===undefined||f.relationshipOrder===null)?null:f.relationshipOrder,
+            referenceTo:f.referenceTo||[],relationshipName:f.relationshipName||null
+        }))};
     })();
-    describeCache.set(key,request);
-    try{return await request;}catch(e){describeCache.delete(key);throw e;}
+    describeCache.set(key,request); try{return await request;}catch(e){describeCache.delete(key);throw e;}
 }
 
 export async function listAllObjectNames(): Promise<string[]> {
@@ -374,9 +351,8 @@ export async function getSharingSignals(objectApiNames: string[]): Promise<Recor
 }
 
 
-export async function runSoqlQuery(soql: string, useToolingApi: boolean): Promise<any[]> {
-    const args = ['data', 'query', '--query', soql, '--json'];
-    if (useToolingApi) args.push('--use-tooling-api');
-    const result = await runSfJson(args);
-    return (result && result.records) || [];
+async function runSoqlQueryViaCli(soql:string,useToolingApi:boolean):Promise<any[]> {
+    const args=['data','query','--query',soql,'--json']; if(useToolingApi)args.push('--use-tooling-api');
+    const result=await runSfJson(args); return (result&&result.records)||[];
 }
+export async function runSoqlQuery(soql:string,useToolingApi:boolean):Promise<any[]> { return runSoqlQueryViaCli(soql,useToolingApi); }
