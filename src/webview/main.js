@@ -25,6 +25,10 @@ const fitModelBtn = document.getElementById('fitModelBtn');
 const canvasMaxBtn = document.getElementById('canvasMaxBtn');
 const canvasSummaryBtn = document.getElementById('canvasSummaryBtn');
 const canvasSummary = document.getElementById('canvasSummary');
+const canvasExportBtn = document.getElementById('canvasExportBtn');
+const relationshipLegend = document.getElementById('relationshipLegend');
+const legendDragHead = document.getElementById('legendDragHead');
+const legendResetBtn = document.getElementById('legendResetBtn');
 const statusText = document.getElementById('statusText');
 const importBtn = document.getElementById('importBtn');
 const importNames = document.getElementById('importNames');
@@ -70,7 +74,7 @@ let renderTimer = null;
 let lastModel = null;
 let dirty = false;
 let focusedEntity = null;
-let erPositions={},boxHeightOverrides={},boxWidthOverrides={},zoomLevel=1,dragState=null,resizeState=null;
+let erPositions={},boxHeightOverrides={},boxWidthOverrides={},zoomLevel=1,dragState=null,resizeState=null,legendDragState=null;
 let allObjectNames = [];
 const pendingPaletteDrops = new Set();
 
@@ -181,13 +185,21 @@ async function init() {
     exportPngBtn.addEventListener('click', doExportPng);
     focusToggle.addEventListener('change', () => { focusedEntity = null; render(); });
     fitModelBtn.addEventListener('click', fitModel);
+    canvasExportBtn.addEventListener('click', () => exportPngBtn.click());
+    legendDragHead.addEventListener('pointerdown', (e) => { const r=relationshipLegend.getBoundingClientRect(), cr=canvasWrap.getBoundingClientRect(); legendDragState={dx:e.clientX-r.left,dy:e.clientY-r.top,cr}; e.preventDefault(); });
+    legendResetBtn.addEventListener('pointerdown',e=>e.stopPropagation());
+    legendResetBtn.addEventListener('click', () => { relationshipLegend.style.left='12px'; relationshipLegend.style.right='auto'; relationshipLegend.style.top='auto'; relationshipLegend.style.bottom='12px'; });
     canvasMaxBtn.addEventListener('click', () => { const on=canvasWrap.classList.toggle('maximised'); canvasMaxBtn.textContent=on?'Restore Canvas':'Maximise Canvas'; setTimeout(fitModel,0); });
     canvasSummaryBtn.addEventListener('click', () => { canvasSummary.hidden=!canvasSummary.hidden; canvasSummaryBtn.textContent=canvasSummary.hidden?'Show Summary':'Hide Summary'; renderCanvasSummary(); });
     zoomOutBtn.addEventListener('click',()=>setZoom(zoomLevel-0.1)); zoomInBtn.addEventListener('click',()=>setZoom(zoomLevel+0.1)); zoomResetBtn.addEventListener('click',()=>setZoom(1));
     autoLayoutBtn.addEventListener('click',()=>{erPositions={};boxHeightOverrides={};boxWidthOverrides={};render();});
     canvas.addEventListener('click', onCanvasClick);
-    window.addEventListener('pointermove',(e)=>{if(dragState){const p=svgPoint(e);erPositions[dragState.name]={x:Math.max(0,p.x-dragState.dx),y:Math.max(0,p.y-dragState.dy)};render();}else if(resizeState){const p=svgPoint(e);boxWidthOverrides[resizeState.name]=Math.max(160,resizeState.w+(p.x-resizeState.x));boxHeightOverrides[resizeState.name]=Math.max(70,resizeState.h+(p.y-resizeState.y));render();}});
-    window.addEventListener('pointerup',()=>{dragState=null;resizeState=null;});
+    window.addEventListener('pointermove',(e)=>{
+        if(dragState){const p=svgPoint(e);erPositions[dragState.name]={x:Math.max(0,p.x-dragState.dx),y:Math.max(0,p.y-dragState.dy)};scheduleRender();}
+        else if(resizeState){const p=svgPoint(e);boxWidthOverrides[resizeState.name]=Math.max(160,resizeState.w+(p.x-resizeState.x));boxHeightOverrides[resizeState.name]=Math.max(70,resizeState.h+(p.y-resizeState.y));scheduleRender();}
+        else if(legendDragState){const x=Math.max(0,e.clientX-legendDragState.cr.left-legendDragState.dx),y=Math.max(0,e.clientY-legendDragState.cr.top-legendDragState.dy);relationshipLegend.style.left=x+'px';relationshipLegend.style.top=y+'px';relationshipLegend.style.right='auto';relationshipLegend.style.bottom='auto';}
+    });
+    window.addEventListener('pointerup',()=>{if(dragState||resizeState){dragState=null;resizeState=null;render();}legendDragState=null;});
 
     window.addEventListener('keydown', (e) => {
         const mod = e.ctrlKey || e.metaKey;
