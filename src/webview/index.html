@@ -11,6 +11,7 @@
     <title>Salesforce ER Modeller</title>
 </head>
 <body>
+    <div id="bootDiagnostic" style="position:fixed;right:12px;bottom:12px;z-index:10000;padding:7px 10px;border:1px solid var(--vscode-panel-border);background:var(--vscode-editorWidget-background);color:var(--vscode-foreground);font:12px monospace">ER runtime: HTML loaded</div>
     <div class="studio-menu-bar">
         <span class="studio-logo">ER</span>
         <span class="studio-name">Diagram Studio</span>
@@ -105,7 +106,7 @@
         </div>
     </div>
 
-    <script nonce="__NONCE__">window.__LOGIC_URI__ = "__LOGIC_URI__";</script>
+    <script nonce="__NONCE__">window.__LOGIC_URI__ = "__LOGIC_URI__"; window.addEventListener("error",function(e){var d=document.getElementById("bootDiagnostic");if(d)d.textContent="ER runtime ERROR: "+(e.message||"unknown")+" @ "+(e.filename||"")+" :"+(e.lineno||"");}); window.addEventListener("unhandledrejection",function(e){var d=document.getElementById("bootDiagnostic");if(d)d.textContent="ER runtime REJECTION: "+(e.reason&&e.reason.message?e.reason.message:String(e.reason));});</script>
     <script nonce="__NONCE__" src="__SCRIPT_URI__"></script>
 </body>
 </html>
