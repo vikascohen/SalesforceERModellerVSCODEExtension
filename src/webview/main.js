@@ -33,6 +33,7 @@ const legendDragHead = document.getElementById('legendDragHead');
 const legendResetBtn = document.getElementById('legendResetBtn');
 const statusText = document.getElementById('statusText');
 const importBtn = document.getElementById('importBtn');
+const loadDefinitionsBtn = document.getElementById('loadDefinitionsBtn');
 const importNames = document.getElementById('importNames');
 const suggestDropdown = document.getElementById('suggestDropdown');
 const dslSuggestDropdown = document.getElementById('dslSuggestDropdown');
@@ -152,6 +153,10 @@ async function init() {
         if (e.target !== editor && !dslSuggestDropdown.contains(e.target)) {
             dslSuggestDropdown.hidden = true;
         }
+    });
+    loadDefinitionsBtn.addEventListener('click', () => {
+        setDefinitionLoading(true);
+        vscode.postMessage({type:'loadObjectDefinitions'});
     });
     importBtn.addEventListener('click', doImport);
     mimicBtn.addEventListener('click',openMimic); mimicCloseBtn.addEventListener('click',closeMimic); mimicAddObjectBtn.addEventListener('click',()=>{mimicAddObject();renderMimic();}); mimicGenerateBtn.addEventListener('click',generateMimic);
@@ -1017,6 +1022,19 @@ function addEntityByDrop(name, dropPoint) {
     vscode.postMessage({ type: 'importFromOrg', names: [name] });
 }
 
+function setDefinitionLoading(loading, label) {
+    document.body.classList.toggle('definitions-loading', loading);
+    // During the one-off cache build, disable every interactive control except
+    // the definition button itself. This prevents imports from racing a partial cache.
+    document.querySelectorAll('button,input,textarea,select').forEach((el)=>{
+        if(el===loadDefinitionsBtn)return;
+        if(loading){el.dataset.defWasDisabled=el.disabled?'1':'0';el.disabled=true;}
+        else {el.disabled=el.dataset.defWasDisabled==='1';delete el.dataset.defWasDisabled;}
+    });
+    loadDefinitionsBtn.disabled=loading;
+    loadDefinitionsBtn.textContent=loading?(label||'Loading Definitions…'):'Load Object Definitions';
+}
+
 function doImport() {
     const raw = importNames.value.trim();
     if (!raw) { setStatus('Enter one or more object API names first.', true); return; }
@@ -1328,6 +1346,17 @@ function handleExtensionMessage(event) {
         if (diagramFileName) diagramFileName.textContent = msg.fileName || 'Untitled Diagram';
     } else if (msg.type === 'orgChanged') {
         setStatus(msg.org ? `Connected: ${msg.org.alias || msg.org.username}` : 'No org selected.');
+    } else if (msg.type === 'objectDefinitionsProgress') {
+        const total=Number(msg.total)||0, completed=Number(msg.completed)||0;
+        setDefinitionLoading(true, 'Loading Definitions ' + completed + '/' + total);
+        setStatus('Loading object definitions: ' + completed + ' of ' + total + '…');
+    } else if (msg.type === 'objectDefinitionsLoaded') {
+        setDefinitionLoading(false);
+        const failed=Number(msg.failed)||0;
+        setStatus('Definitions loaded: ' + msg.completed + ' objects' + (failed ? ' (' + failed + ' unavailable)' : '') + '. Import and drag/drop are ready.');
+    } else if (msg.type === 'objectDefinitionsError') {
+        setDefinitionLoading(false);
+        setStatus('Could not load object definitions: ' + (msg.message||'Unknown error'), true);
     } else if (msg.type === 'objectList') {
         allObjectNames = msg.names || [];
         renderSuggestions();
