@@ -1025,13 +1025,8 @@ function addEntityByDrop(name, dropPoint) {
 
 function setDefinitionLoading(loading, label) {
     document.body.classList.toggle('definitions-loading', loading);
-    // During the one-off cache build, disable every interactive control except
-    // the definition button itself. This prevents imports from racing a partial cache.
-    document.querySelectorAll('button,input,textarea,select').forEach((el)=>{
-        if(el===loadDefinitionsBtn)return;
-        if(loading){el.dataset.defWasDisabled=el.disabled?'1':'0';el.disabled=true;}
-        else {el.disabled=el.dataset.defWasDisabled==='1';delete el.dataset.defWasDisabled;}
-    });
+    // Cache loading is background work. Keep the modeller usable; only prevent
+    // a second cache-load request while the current one is running.
     loadDefinitionsBtn.disabled=loading;
     loadDefinitionsBtn.textContent=loading?(label||'Loading Definitions…'):'Load Object Definitions';
 }
