@@ -3,6 +3,8 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 const describeCache = new Map<string, Promise<SfCliDescribe>>();
+let objectNamesCache: Promise<string[]> | null = null;
+const fieldDescriptionsCache = new Map<string, Promise<FieldDescriptionInfo[]>>();
 
 // Every function here shells out to the `sf` CLI and parses its --json
 // output. This mirrors how the Salesforce Org Visualizer extension
@@ -107,6 +109,8 @@ export async function listAuthenticatedOrgs(): Promise<OrgListEntry[]> {
 export async function setTargetOrg(usernameOrAlias: string): Promise<void> {
     await runSfJson(['config', 'set', 'target-org=' + usernameOrAlias, '--json']);
     describeCache.clear();
+    objectNamesCache = null;
+    fieldDescriptionsCache.clear();
 }
 
 async function runSfJson(args: string[]): Promise<any> {
@@ -171,20 +175,15 @@ export async function describeObject(apiName: string): Promise<SfCliDescribe> {
 }
 
 export async function listAllObjectNames(): Promise<string[]> {
-    // `sf sobject list --sobject all --json`. Genuinely unverified against
-    // a live org from this environment -- handling both plausible result
-    // shapes (a plain array of name strings, or an array of objects with
-    // a `name` property) rather than committing to one guess, since
-    // getting this wrong would silently return an empty palette instead
-    // of a clear error.
-    const { stdout } = await execAsync('sf sobject list --sobject all --json', { maxBuffer: 1024 * 1024 * 5 });
-    const parsed = JSON.parse(stdout);
-    if (parsed.status !== 0) {
-        throw new SfCliError(parsed.message || 'Could not list objects.');
-    }
-    const raw: any[] = Array.isArray(parsed.result) ? parsed.result : [];
-    const names = raw.map((entry) => (typeof entry === 'string' ? entry : entry && entry.name)).filter(Boolean);
-    return names.sort();
+    if (objectNamesCache) return objectNamesCache;
+    objectNamesCache = (async () => {
+        const { stdout } = await execAsync('sf sobject list --sobject all --json', { maxBuffer: 1024 * 1024 * 5 });
+        const parsed = JSON.parse(stdout);
+        if (parsed.status !== 0) throw new SfCliError(parsed.message || 'Could not list objects.');
+        const raw: any[] = Array.isArray(parsed.result) ? parsed.result : [];
+        return raw.map((entry) => (typeof entry === 'string' ? entry : entry && entry.name)).filter(Boolean).sort();
+    })();
+    try { return await objectNamesCache; } catch (e) { objectNamesCache = null; throw e; }
 }
 
 export interface FieldDescriptionInfo {
@@ -194,23 +193,12 @@ export interface FieldDescriptionInfo {
 }
 
 export async function getFieldDescriptions(objectApiName: string): Promise<FieldDescriptionInfo[]> {
-    if (!/^[A-Za-z0-9_]+$/.test(objectApiName)) {
-        throw new SfCliError(`"${objectApiName}" is not a valid object API name.`);
-    }
-    // FieldDefinition is metadata-catalog data, queried via the Tooling
-    // API -- the same source (and the same field names: QualifiedApiName,
-    // Description, LastModifiedDate) the original Apex version reads via
-    // WITH USER_MODE SOQL. Viewing it generally requires "View Setup and
-    // Configuration" in the org; if that's missing, this query comes back
-    // empty rather than erroring, which the caller treats as "no
-    // descriptions available" rather than a hard failure.
-    const soql = `SELECT QualifiedApiName, Description, LastModifiedDate FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '${objectApiName}'`;
-    const records = await runSoqlQuery(soql, true);
-    return records.map((r) => ({
-        apiName: r.QualifiedApiName,
-        description: r.Description || null,
-        lastModifiedDate: r.LastModifiedDate || null
-    }));
+    if (!/^[A-Za-z0-9_]+$/.test(objectApiName)) throw new SfCliError(`"${objectApiName}" is not a valid object API name.`);
+    const key=objectApiName.toLowerCase();
+    const cached=fieldDescriptionsCache.get(key); if(cached) return cached;
+    const request=(async()=>{const soql = `SELECT QualifiedApiName, Description, LastModifiedDate FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '${objectApiName}'`;const records=await runSoqlQuery(soql,true);return records.map((r)=>({apiName:r.QualifiedApiName,description:r.Description||null,lastModifiedDate:r.LastModifiedDate||null}));})();
+    fieldDescriptionsCache.set(key,request);
+    try{return await request;}catch(e){fieldDescriptionsCache.delete(key);throw e;}
 }
 
 export async function getRecordCount(objectApiName: string): Promise<number> {
