@@ -520,7 +520,7 @@ class ErModellerPanel {
     private getHtmlForWebview(): string {
         const webview = this.panel.webview;
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'main.js')
+            vscode.Uri.joinPath(this.extensionUri, 'src', 'webview', 'main.bundle.js')
         );
         const logicUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'src', 'erDiagramLogic.js')
