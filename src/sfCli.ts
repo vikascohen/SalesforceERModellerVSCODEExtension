@@ -174,26 +174,32 @@ async function runSfJson(args: string[]): Promise<any> {
 }
 
 export async function describeAllObjectsBulk(): Promise<SfCliDescribe[]> {
-    // One authenticated CLI process, one Tooling API query. This replaces one
-    // sf process per object when building the explicit definition cache.
-    const soql = "SELECT EntityDefinition.QualifiedApiName, EntityDefinition.Label, EntityDefinition.IsCustom, QualifiedApiName, Label, DataType, IsNillable, IsCalculated, IsFieldDefinition FROM FieldDefinition WHERE IsFieldDefinition = true ORDER BY EntityDefinition.QualifiedApiName, QualifiedApiName";
+    // Bulk cache warm-up using one Tooling query. Keep the query deliberately
+    // flat: compound parent-field selections such as EntityDefinition.Label
+    // are not accepted consistently by sf data query --use-tooling-api.
+    const soql = "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, IsNillable, IsCalculated FROM FieldDefinition WHERE IsFieldDefinition = true";
     const records = await runSoqlQueryViaCli(soql, true);
-    const objects = new Map<string,SfCliDescribe>();
-    for (const r of records) {
-        const entity=r.EntityDefinition||{};
-        const name=entity.QualifiedApiName;
-        if(!name||!r.QualifiedApiName) continue;
-        let obj=objects.get(name);
-        if(!obj){obj={name,label:entity.Label||name,custom:!!entity.IsCustom,fields:[]};objects.set(name,obj);}
-        const dt=String(r.DataType||'').toLowerCase();
-        obj.fields.push({
-            name:r.QualifiedApiName,label:r.Label||r.QualifiedApiName,type:dt,
-            custom:String(r.QualifiedApiName).endsWith('__c'),nillable:!!r.IsNillable,
-            createable:true,calculated:!!r.IsCalculated,calculatedFormula:null,
-            cascadeDelete:false,relationshipOrder:null,referenceTo:[],relationshipName:null
-        });
+    const byEntity = new Map<string, any[]>();
+    for(const r of records){
+        const id=String(r.EntityDefinitionId||'');
+        if(!id||!r.QualifiedApiName) continue;
+        const list=byEntity.get(id)||[]; list.push(r); byEntity.set(id,list);
     }
-    return [...objects.values()];
+    // EntityDefinition is fetched separately, still in one bulk query rather
+    // than one describe process per object.
+    const entities = await runSoqlQueryViaCli("SELECT Id, QualifiedApiName, Label, IsCustom FROM EntityDefinition", true);
+    const objects:SfCliDescribe[]=[];
+    for(const entity of entities){
+        const name=entity.QualifiedApiName, rows=byEntity.get(String(entity.Id))||[];
+        if(!name||rows.length===0) continue;
+        objects.push({name,label:entity.Label||name,custom:!!entity.IsCustom,fields:rows.map((r:any)=>({
+            name:r.QualifiedApiName,label:r.Label||r.QualifiedApiName,type:String(r.DataType||'').toLowerCase(),
+            custom:String(r.QualifiedApiName).endsWith('__c'),nillable:!!r.IsNillable,createable:true,
+            calculated:!!r.IsCalculated,calculatedFormula:null,cascadeDelete:false,relationshipOrder:null,
+            referenceTo:[],relationshipName:null
+        }))});
+    }
+    return objects;
 }
 
 export async function describeObject(apiName: string): Promise<SfCliDescribe> {
