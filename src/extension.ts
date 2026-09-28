@@ -255,13 +255,12 @@ class ErModellerPanel {
             return;
         }
         try {
-            const described: ClassifiedObject[] = [];
-            for (const rawName of names) {
-                const name = rawName.trim();
-                if (!name) continue;
-                const raw = await describeObject(name);
-                described.push(classifyDescribe(raw));
-            }
+            const cleanNames = names.map((name) => name.trim()).filter(Boolean);
+            // sf CLI startup is the dominant cost here. Describes are
+            // independent, so never serialize a multi-object drag/import.
+            const described = await Promise.all(
+                cleanNames.map(async (name) => classifyDescribe(await describeObject(name)))
+            );
             const dsl = buildErSource(described);
             this.panel.webview.postMessage({ type: 'appendDsl', dsl });
         } catch (e) {
