@@ -174,25 +174,11 @@ async function runSfJson(args: string[]): Promise<any> {
 }
 
 export async function describeAllObjectsBulk(): Promise<SfCliDescribe[]> {
-    // Salesforce deliberately requires FieldDefinition queries to be scoped by
-    // a reified key (EntityDefinitionId or DurableId). There is no valid
-    // unfiltered all-fields FieldDefinition SOQL query.
-    //
-    // Use EntityDefinition only for the fast catalogue here. Exact field and
-    // relationship metadata remains lazy and comes from sobject describe when
-    // an object is actually imported.
-    const entities = await runSoqlQueryViaCli(
-        "SELECT DurableId, QualifiedApiName, Label, IsCustom FROM EntityDefinition",
-        true
-    );
-    return entities
-        .filter((entity:any)=>entity.QualifiedApiName)
-        .map((entity:any)=>({
-            name:String(entity.QualifiedApiName),
-            label:String(entity.Label||entity.QualifiedApiName),
-            custom:!!entity.IsCustom,
-            fields:[]
-        }));
+    // The sf CLI already has a supported bulk SObject catalogue command.
+    // Do not query Tooling EntityDefinition/FieldDefinition here: their
+    // queryable columns and reified-field restrictions vary by API surface.
+    const names=await listAllObjectNames();
+    return names.map((name)=>({name,label:name,custom:name.endsWith('__c'),fields:[]}));
 }
 
 export async function describeObject(apiName: string): Promise<SfCliDescribe> {
