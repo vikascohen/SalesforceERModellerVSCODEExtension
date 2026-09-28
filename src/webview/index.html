@@ -11,35 +11,36 @@
     <title>Salesforce ER Modeller</title>
 </head>
 <body>
-    <div class="toolbar">
-        <button id="openBtn" title="Open a saved .erd diagram">Open</button>
-        <button id="saveBtn" title="Save (Ctrl/Cmd+S)">Save</button>
-        <button id="saveAsBtn" title="Save As...">Save As</button>
-        <span class="sep"></span>
-        <div class="autocomplete-wrap">
+    <div class="studio-menu-bar">
+        <span class="studio-logo">ER</span>
+        <span class="studio-name">Diagram Studio</span>
+        <span class="studio-spacer"></span>
+        <span class="status" id="statusText"></span>
+    </div>
+    <div class="toolbar studio-toolbar">
+        <div class="studio-menu"><button class="studio-menu-trigger">File <span>▾</span></button><div class="studio-menu-popover">
+            <button id="openBtn">Open...</button><button id="saveBtn">Save</button><button id="saveAsBtn">Save As...</button>
+            <div class="studio-menu-divider"></div><button id="exportMermaidBtn">Copy Mermaid</button><button id="exportDrawioBtn">Export draw.io</button><button id="exportPngBtn">Export PNG</button>
+        </div></div>
+        <div class="studio-menu"><button class="studio-menu-trigger">Diagram <span>▾</span></button><div class="studio-menu-popover">
+            <button id="mimicBtn">Mimic New ER</button><button id="autoLayoutBtn">Auto Layout</button><button id="compareOrgBtn">Compare with Org</button>
+        </div></div>
+        <div class="studio-menu"><button class="studio-menu-trigger">View <span>▾</span></button><div class="studio-menu-popover">
+            <label class="studio-menu-check"><input type="checkbox" id="sharingViewToggle"> Sharing View</label>
+            <label class="studio-menu-check"><input type="checkbox" id="heatmapToggle"> Heatmap</label>
+            <button id="dictionaryToggleBtn">Data Dictionary</button><button id="architectureBtn">Architecture Intelligence</button><button id="paletteToggleBtn">Object Palette</button>
+        </div></div>
+        <span class="studio-toolbar-sep"></span>
+        <label class="toggle"><input type="checkbox" id="focusToggle"> Focus mode</label>
+        <div class="zoom-group"><button id="zoomOutBtn" title="Zoom out">−</button><button id="zoomResetBtn" title="Reset zoom">100%</button><button id="zoomInBtn" title="Zoom in">+</button></div>
+        <span class="studio-spacer"></span>
+        <div class="autocomplete-wrap studio-import">
             <input id="importNames" type="text" placeholder="Account, Contact, Order__c" title="Object API names, comma-separated">
             <div id="suggestDropdown" class="suggest-dropdown" hidden></div>
         </div>
-        <button id="importBtn" title="Describe these objects via the Salesforce CLI and add them to the canvas">Import from Org</button>
-        <button id="mimicBtn" title="Point-and-click custom object model builder">Mimic New ER</button>
-        <span class="sep"></span>
-        <button id="exportMermaidBtn" title="Copy Mermaid erDiagram syntax to the clipboard">Copy Mermaid</button>
-        <button id="exportDrawioBtn" title="Export as a draw.io / diagrams.net file">Export draw.io</button>
-        <button id="exportPngBtn" title="Export the current diagram as PNG">Export PNG</button>
-        <span class="sep"></span>
-        <label class="toggle"><input type="checkbox" id="focusToggle"> Focus mode</label>
-        <button id="zoomOutBtn" title="Zoom out">−</button><button id="zoomResetBtn" title="Reset zoom">100%</button><button id="zoomInBtn" title="Zoom in">+</button>
-        <button id="autoLayoutBtn" title="Discard manual positions and sizes">Auto Layout</button>
-        <span class="sep"></span>
-        <button id="dictionaryToggleBtn" title="Browse field descriptions, last-modified dates, and on-demand usage percentages">Data Dictionary</button>
-        <label class="toggle"><input type="checkbox" id="heatmapToggle"> Heatmap</label>
-        <label class="toggle"><input type="checkbox" id="sharingViewToggle"> Sharing View</label>
-        <span class="sep"></span>
-        <button id="compareOrgBtn" title="Compare the DSL against the current org schema for every entity on canvas">Compare with Org</button>
-        <button id="architectureBtn" title="Topology, impact, paths and junction intelligence">Architecture Intelligence</button>
-        <button id="paletteToggleBtn" title="Show a searchable, drag-and-drop object palette">Object Palette</button>
-        <span class="status" id="statusText"></span>
+        <button id="importBtn" class="studio-primary" title="Describe these objects via the Salesforce CLI and add them to the canvas">Import from Org</button>
     </div>
+    <div class="studio-tab-bar"><div class="studio-tab active"><span class="studio-tab-dot"></span><span>Untitled Diagram</span></div><span class="studio-tab-hint">ER DSL + visual canvas</span></div>
     <div class="main">
         <div class="dsl-editor-wrap">
             <textarea id="dslEditor" spellcheck="false" placeholder="entity Account : Name, Industry&#10;entity Contact : LastName&#10;Contact.AccountId -&gt; Account"></textarea>
