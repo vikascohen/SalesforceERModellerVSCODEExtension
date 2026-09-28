@@ -131,6 +131,7 @@ class ErModellerPanel {
     private disposables: vscode.Disposable[] = [];
     private currentFileUri: vscode.Uri | undefined;
     private isDirty = false;
+    private currentOrg: Awaited<ReturnType<typeof getTargetOrg>> = null;
 
     public static createOrShow(extensionUri: vscode.Uri, forceNew = false): void {
         const column = vscode.window.activeTextEditor
@@ -177,6 +178,7 @@ class ErModellerPanel {
 
     public notifyOrgChanged(): void {
         getTargetOrg().then((org) => {
+            this.currentOrg = org;
             this.panel.webview.postMessage({ type: 'orgChanged', org });
         });
     }
@@ -246,7 +248,11 @@ class ErModellerPanel {
     }
 
     private async handleImportFromOrg(names: string[]): Promise<void> {
-        const org = await getTargetOrg();
+        // Do not launch an extra `sf org display` process for every palette
+        // drop. The panel already knows the selected org from ready/orgChanged.
+        // That process startup was pure latency before Account could even begin
+        // describing.
+        const org = this.currentOrg;
         if (!org) {
             this.panel.webview.postMessage({
                 type: 'importError',
