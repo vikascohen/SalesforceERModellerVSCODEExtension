@@ -936,7 +936,12 @@ function renderPaletteList() {
         item.className = 'palette-item';
         item.textContent = name;
         item.draggable = true;
+        item.addEventListener('pointerenter', () => requestFieldsForEntity(name), { once: true });
         item.addEventListener('dragstart', (e) => {
+            // Warm the describe cache as soon as the gesture starts. The drop
+            // then reuses/coalesces the same Promise instead of only beginning
+            // Salesforce metadata retrieval after the mouse is released.
+            requestFieldsForEntity(name);
             e.dataTransfer.setData('text/plain', name);
             e.dataTransfer.effectAllowed = 'copy';
         });
