@@ -76,7 +76,6 @@ const architectureBtn=document.getElementById('architectureBtn'),architecturePan
 
 let renderTimer = null;
 let interactionFrame = null;
-let palettePointerDrag = null;
 let lastModel = null;
 let dirty = false;
 let focusedEntity = null;
@@ -940,54 +939,37 @@ function renderPaletteList() {
         const item = document.createElement('div');
         item.className = 'palette-item';
         item.textContent = name;
-        // VS Code webviews are inconsistent with native HTML5 drag/drop.
-        // Use pointer capture semantics instead so palette -> canvas works
-        // deterministically on Linux, Windows and macOS.
-        item.draggable = false;
-        item.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
-            palettePointerDrag = { name, startX:e.clientX, startY:e.clientY, active:false };
-            item.classList.add('dragging');
-            requestFieldsForEntity(name);
-            e.preventDefault();
+        item.draggable = true;
+        item.addEventListener('dragstart', (e) => {
+            if (!e.dataTransfer) return;
+            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('application/x-sf-er-object', name);
+            e.dataTransfer.setData('text/plain', name);
         });
+        item.addEventListener('dblclick', () => addEntityByDrop(name, null));
         paletteList.appendChild(item);
     });
 }
 
-function pointInsideCanvas(clientX,clientY){
-    const r=canvas.parentElement.getBoundingClientRect();
-    return clientX>=r.left&&clientX<=r.right&&clientY>=r.top&&clientY<=r.bottom;
-}
-window.addEventListener('pointermove',(e)=>{
-    if(!palettePointerDrag)return;
-    if(!palettePointerDrag.active&&Math.hypot(e.clientX-palettePointerDrag.startX,e.clientY-palettePointerDrag.startY)>4)palettePointerDrag.active=true;
-    canvas.parentElement.classList.toggle('drag-over',palettePointerDrag.active&&pointInsideCanvas(e.clientX,e.clientY));
-});
-window.addEventListener('pointerup',(e)=>{
-    if(!palettePointerDrag)return;
-    document.querySelectorAll('.palette-item.dragging').forEach(el=>el.classList.remove('dragging'));
-    canvas.parentElement.classList.remove('drag-over');
-    const drag=palettePointerDrag;palettePointerDrag=null;
-    if(drag.active&&pointInsideCanvas(e.clientX,e.clientY))addEntityByDrop(drag.name,svgPoint(e));
-});
-
 function handleCanvasDragOver(e) {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    canvas.parentElement.classList.add('drag-over');
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    canvasWrap.classList.add('drag-over');
 }
 
-function handleCanvasDragLeave() {
-    canvas.parentElement.classList.remove('drag-over');
+function handleCanvasDragLeave(e) {
+    if (e.relatedTarget && canvasWrap.contains(e.relatedTarget)) return;
+    canvasWrap.classList.remove('drag-over');
 }
 
 function handleCanvasDrop(e) {
     e.preventDefault();
-    canvas.parentElement.classList.remove('drag-over');
-    const name = e.dataTransfer.getData('text/plain');
-    if (!name) return;
-    addEntityByDrop(name, svgPoint(e));
+    e.stopPropagation();
+    canvasWrap.classList.remove('drag-over');
+    const dt=e.dataTransfer;
+    const name=dt ? (dt.getData('application/x-sf-er-object') || dt.getData('text/plain')) : '';
+    if (!name) { setStatus('Drop failed: no object was transferred.', true); return; }
+    addEntityByDrop(name.trim(), svgPoint(e));
 }
 
 function addEntityByDrop(name, dropPoint) {
