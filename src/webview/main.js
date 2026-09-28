@@ -76,6 +76,7 @@ const architectureBtn=document.getElementById('architectureBtn'),architecturePan
 
 let renderTimer = null;
 let interactionFrame = null;
+let palettePointerDrag = null;
 let lastModel = null;
 let dirty = false;
 let focusedEntity = null;
@@ -939,19 +940,37 @@ function renderPaletteList() {
         const item = document.createElement('div');
         item.className = 'palette-item';
         item.textContent = name;
-        item.draggable = true;
-        item.addEventListener('pointerenter', () => requestFieldsForEntity(name), { once: true });
-        item.addEventListener('dragstart', (e) => {
-            // Warm the describe cache as soon as the gesture starts. The drop
-            // then reuses/coalesces the same Promise instead of only beginning
-            // Salesforce metadata retrieval after the mouse is released.
+        // VS Code webviews are inconsistent with native HTML5 drag/drop.
+        // Use pointer capture semantics instead so palette -> canvas works
+        // deterministically on Linux, Windows and macOS.
+        item.draggable = false;
+        item.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            palettePointerDrag = { name, startX:e.clientX, startY:e.clientY, active:false };
+            item.classList.add('dragging');
             requestFieldsForEntity(name);
-            e.dataTransfer.setData('text/plain', name);
-            e.dataTransfer.effectAllowed = 'copy';
+            e.preventDefault();
         });
         paletteList.appendChild(item);
     });
 }
+
+function pointInsideCanvas(clientX,clientY){
+    const r=canvas.parentElement.getBoundingClientRect();
+    return clientX>=r.left&&clientX<=r.right&&clientY>=r.top&&clientY<=r.bottom;
+}
+window.addEventListener('pointermove',(e)=>{
+    if(!palettePointerDrag)return;
+    if(!palettePointerDrag.active&&Math.hypot(e.clientX-palettePointerDrag.startX,e.clientY-palettePointerDrag.startY)>4)palettePointerDrag.active=true;
+    canvas.parentElement.classList.toggle('drag-over',palettePointerDrag.active&&pointInsideCanvas(e.clientX,e.clientY));
+});
+window.addEventListener('pointerup',(e)=>{
+    if(!palettePointerDrag)return;
+    document.querySelectorAll('.palette-item.dragging').forEach(el=>el.classList.remove('dragging'));
+    canvas.parentElement.classList.remove('drag-over');
+    const drag=palettePointerDrag;palettePointerDrag=null;
+    if(drag.active&&pointInsideCanvas(e.clientX,e.clientY))addEntityByDrop(drag.name,svgPoint(e));
+});
 
 function handleCanvasDragOver(e) {
     e.preventDefault();
