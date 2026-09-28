@@ -181,14 +181,16 @@ async function init() {
     driftCloseBtn.addEventListener('click', closeDriftModal);
     paletteToggleBtn.addEventListener('click', togglePalette);
     dslExpandBtn.addEventListener('click', () => {
-        const expanded = dslEditorWrap.classList.toggle('expanded');
+        const expanded = !document.body.classList.contains('dsl-fullscreen');
+        document.body.classList.toggle('dsl-fullscreen', expanded);
+        dslEditorWrap.classList.toggle('expanded', expanded);
         dslEditorWrap.classList.remove('collapsed');
         dslOpenBtn.hidden = true;
         dslExpandBtn.textContent = expanded ? 'Restore' : 'Expand';
         dslExpandBtn.title = expanded ? 'Restore split view' : 'Expand DSL editor';
         if (expanded) editor.focus();
     });
-    dslCollapseBtn.addEventListener('click', () => { dslEditorWrap.classList.remove('expanded'); dslEditorWrap.classList.add('collapsed'); dslOpenBtn.hidden=false; dslExpandBtn.textContent='Expand'; });
+    dslCollapseBtn.addEventListener('click', () => { document.body.classList.remove('dsl-fullscreen'); dslEditorWrap.classList.remove('expanded'); dslEditorWrap.classList.add('collapsed'); dslOpenBtn.hidden=false; dslExpandBtn.textContent='Expand'; });
     dslOpenBtn.addEventListener('click', () => { dslEditorWrap.classList.remove('collapsed'); dslOpenBtn.hidden=true; editor.focus(); });
     paletteSearch.addEventListener('input', renderPaletteList);
     canvas.parentElement.addEventListener('dragover', handleCanvasDragOver);
