@@ -158,49 +158,29 @@ function approximateGraphDepth(names, adjacency) {
 }
 
 function findCycles(names, adjacency, byKey) {
-    const found = new Set();
-    const cycles = [];
-    const MAX_CYCLES = 25;
-    const MAX_DEPTH = 7;
-
-    const canonical = path => {
-        const core = path.slice(0, -1);
-        const rotations = [];
-
-        for (let i = 0; i < core.length; i++) {
-            rotations.push(core.slice(i).concat(core.slice(0, i)).join('|'));
+    // Interactive architecture views must remain predictable on dense Salesforce
+    // schemas. Enumerating every simple cycle grows exponentially, so report a
+    // bounded set of fundamental cycles discovered from a DFS spanning forest.
+    const cycles=[], seen=new Set(), parent=new Map(), depth=new Map(), emitted=new Set(), MAX_CYCLES=25;
+    const canonical=(nodes)=>{const a=[...nodes],r=[...nodes].reverse();return [a.join('|'),r.join('|')].sort()[0];};
+    for(const raw of names){
+        if(cycles.length>=MAX_CYCLES)break;
+        const root=raw.toLowerCase(); if(seen.has(root))continue;
+        parent.set(root,null);depth.set(root,0);seen.add(root);
+        const stack=[{node:root,neighbors:[...(adjacency.get(root)||[])],i:0}];
+        while(stack.length&&cycles.length<MAX_CYCLES){
+            const frame=stack[stack.length-1];
+            if(frame.i>=frame.neighbors.length){stack.pop();continue;}
+            const next=frame.neighbors[frame.i++], node=frame.node;
+            if(next===parent.get(node))continue;
+            if(!seen.has(next)){seen.add(next);parent.set(next,node);depth.set(next,(depth.get(node)||0)+1);stack.push({node:next,neighbors:[...(adjacency.get(next)||[])],i:0});continue;}
+            if((depth.get(next)||0)>=(depth.get(node)||0))continue;
+            const path=[node];let cur=node;
+            while(cur!==next&&cur!=null){cur=parent.get(cur);if(cur!=null)path.push(cur);}
+            if(cur!==next||path.length<3)continue;
+            const key=canonical(path);if(emitted.has(key))continue;emitted.add(key);
+            cycles.push(path.concat(node).map(k=>byKey.get(k)||k));
         }
-
-        const reversed = [...core].reverse();
-        for (let i = 0; i < reversed.length; i++) {
-            rotations.push(reversed.slice(i).concat(reversed.slice(0, i)).join('|'));
-        }
-        return rotations.sort()[0];
-    };
-
-    const dfs = (start, current, path, seen) => {
-        if (cycles.length >= MAX_CYCLES) return;
-
-        for (const neighbor of adjacency.get(current) || []) {
-            if (neighbor === start && path.length >= 3) {
-                const cyclePath = path.concat(start);
-                const key = canonical(cyclePath);
-                if (!found.has(key)) {
-                    found.add(key);
-                    cycles.push(cyclePath.map(item => byKey.get(item) || item));
-                }
-            } else if (!seen.has(neighbor) && path.length < MAX_DEPTH) {
-                const nextSeen = new Set(seen);
-                nextSeen.add(neighbor);
-                dfs(start, neighbor, path.concat(neighbor), nextSeen);
-            }
-        }
-    };
-
-    for (const name of names) {
-        if (cycles.length >= MAX_CYCLES) break;
-        const key = name.toLowerCase();
-        dfs(key, key, [key], new Set([key]));
     }
     return cycles;
 }
@@ -398,7 +378,11 @@ function graphIndex(analysis) {
         }
     });
 
-    return { names, adj, outboundByNode, inboundByNode };
+    const index = { names, adj, outboundByNode, inboundByNode };
+    // Reuse this index across Object Impact, Path Finder and Blast Radius.
+    // These tabs all analyse the same immutable analysis snapshot.
+    analysis._graphIndex = index;
+    return index;
 }
 
 export function findArchitecturePath(analysis, source, target) {
