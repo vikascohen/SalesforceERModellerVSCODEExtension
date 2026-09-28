@@ -81,6 +81,8 @@ let dirty = false;
 let focusedEntity = null;
 let erPositions={},boxHeightOverrides={},boxWidthOverrides={},zoomLevel=1,dragState=null,resizeState=null,legendDragState=null;
 let allObjectNames = [];
+const paletteDslCache = new Map();
+const paletteDslFetching = new Set();
 const pendingPaletteDrops = new Set();
 const pendingPaletteDropPositions = new Map();
 
@@ -940,8 +942,10 @@ function renderPaletteList() {
         item.className = 'palette-item';
         item.textContent = name;
         item.draggable = true;
+        item.addEventListener('mouseenter', () => prefetchPaletteDsl(name), { once:true });
         item.addEventListener('dragstart', (e) => {
             if (!e.dataTransfer) return;
+            prefetchPaletteDsl(name);
             e.dataTransfer.effectAllowed = 'copy';
             e.dataTransfer.setData('application/x-sf-er-object', name);
             e.dataTransfer.setData('text/plain', name);
@@ -972,6 +976,23 @@ function handleCanvasDrop(e) {
     addEntityByDrop(name.trim(), svgPoint(e));
 }
 
+function prefetchPaletteDsl(name){
+    const key=name.toLowerCase();
+    if(paletteDslCache.has(key)||paletteDslFetching.has(key))return;
+    paletteDslFetching.add(key);
+    vscode.postMessage({type:'prefetchPaletteObject',name});
+}
+
+function appendDroppedDsl(name,dsl){
+    pendingPaletteDrops.delete(name.toLowerCase());
+    const pos=pendingPaletteDropPositions.get(name.toLowerCase());
+    pendingPaletteDropPositions.delete(name.toLowerCase());
+    editor.value=editor.value.trim()?editor.value.trimEnd()+'\n\n'+dsl:dsl;
+    markDirty();
+    render();
+    setStatus('Imported.');
+}
+
 function addEntityByDrop(name, dropPoint) {
     let existingNames = [];
     if (editor.value.trim()) {
@@ -984,6 +1005,8 @@ function addEntityByDrop(name, dropPoint) {
         erPositions[name] = { x: Math.max(0, dropPoint.x - 100), y: Math.max(0, dropPoint.y - 18) };
         pendingPaletteDropPositions.set(name.toLowerCase(), name);
     }
+    const cached=paletteDslCache.get(name.toLowerCase());
+    if(cached){appendDroppedDsl(name,cached);return;}
     setStatus('Loading ' + name + '...');
     vscode.postMessage({ type: 'importFromOrg', names: [name] });
 }
@@ -1272,7 +1295,10 @@ function drawGeometry(geo) {
 
 function handleExtensionMessage(event) {
     const msg = event.data;
-    if (msg.type === 'appendDsl') {
+    if (msg.type === 'paletteObjectReady') {
+        const key=(msg.name||'').toLowerCase(); paletteDslFetching.delete(key); if(msg.dsl) paletteDslCache.set(key,msg.dsl);
+        if(pendingPaletteDrops.has(key)&&msg.dsl) appendDroppedDsl(msg.name,msg.dsl);
+    } else if (msg.type === 'appendDsl') {
         pendingPaletteDrops.clear();
         pendingPaletteDropPositions.clear();
         editor.value = editor.value.trim() ? editor.value.trimEnd() + '\n\n' + msg.dsl : msg.dsl;
