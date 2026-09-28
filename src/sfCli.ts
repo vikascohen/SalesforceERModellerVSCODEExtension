@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const describeCache = new Map<string, Promise<SfCliDescribe>>();
 
 // Every function here shells out to the `sf` CLI and parses its --json
 // output. This mirrors how the Salesforce Org Visualizer extension
@@ -105,6 +106,7 @@ export async function listAuthenticatedOrgs(): Promise<OrgListEntry[]> {
 
 export async function setTargetOrg(usernameOrAlias: string): Promise<void> {
     await runSfJson(['config', 'set', 'target-org=' + usernameOrAlias, '--json']);
+    describeCache.clear();
 }
 
 async function runSfJson(args: string[]): Promise<any> {
@@ -137,13 +139,11 @@ async function runSfJson(args: string[]): Promise<any> {
 }
 
 export async function describeObject(apiName: string): Promise<SfCliDescribe> {
-    if (!/^[A-Za-z0-9_]+$/.test(apiName)) {
-        // Same discipline as the original Apex controller's
-        // isSafeIdentifier() check -- this value ends up on a shell
-        // command line, so it is validated before that happens, not
-        // trusted as-is.
-        throw new SfCliError(`"${apiName}" is not a valid object API name.`);
-    }
+    if (!/^[A-Za-z0-9_]+$/.test(apiName)) throw new SfCliError(`"${apiName}" is not a valid object API name.`);
+    const key=apiName.toLowerCase();
+    const cached=describeCache.get(key);
+    if(cached) return cached;
+    const request=(async()=> {
     const result = await runSfJson(['sobject', 'describe', '--sobject', apiName, '--json']);
     return {
         name: result.name,
@@ -164,6 +164,10 @@ export async function describeObject(apiName: string): Promise<SfCliDescribe> {
             relationshipName: f.relationshipName || null
         }))
     };
+
+    })();
+    describeCache.set(key,request);
+    try{return await request;}catch(e){describeCache.delete(key);throw e;}
 }
 
 export async function listAllObjectNames(): Promise<string[]> {
