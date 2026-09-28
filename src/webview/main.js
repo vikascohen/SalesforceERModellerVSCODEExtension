@@ -999,6 +999,8 @@ function onCanvasClick(e) {
 function setZoom(value){zoomLevel=Math.max(0.4,Math.min(2,Math.round(value*10)/10));zoomResetBtn.textContent=Math.round(zoomLevel*100)+'%';canvas.style.transform='scale('+zoomLevel+')';canvas.style.transformOrigin='0 0';}
 function fitModel(){
     if(!lastModel)return;
+    // Fit Model is presentation mode: maximise first, then lay out and fit.
+    if(!canvasWrap.classList.contains('maximised')){canvasWrap.classList.add('maximised');canvasMaxBtn.textContent='Restore Canvas';}
     const entities=lastModel.entities||[], rels=lastModel.relationships||[];
     if(!entities.length)return;
     const byName=new Map(entities.map(e=>[e.name,e])),adj=new Map(entities.map(e=>[e.name,new Set()]));
