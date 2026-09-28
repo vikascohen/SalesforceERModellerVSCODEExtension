@@ -999,13 +999,23 @@ function onCanvasClick(e) {
 function setZoom(value){zoomLevel=Math.max(0.4,Math.min(2,Math.round(value*10)/10));zoomResetBtn.textContent=Math.round(zoomLevel*100)+'%';canvas.style.transform='scale('+zoomLevel+')';canvas.style.transformOrigin='0 0';}
 function fitModel(){
     if(!lastModel)return;
-    const geo=buildErGeometry(lastModel,erPositions,boxHeightOverrides,boxWidthOverrides);
-    const pad=36,w=Math.max(1,canvasWrap.clientWidth-pad),h=Math.max(1,canvasWrap.clientHeight-pad);
-    const scale=Math.min(w/Math.max(1,geo.svgWidth),h/Math.max(1,geo.svgHeight),2);
-    zoomLevel=Math.max(0.1,Math.round(scale*100)/100);
-    zoomResetBtn.textContent=Math.round(zoomLevel*100)+'%';
-    canvas.style.transform='scale('+zoomLevel+')';canvas.style.transformOrigin='0 0';
-    canvasWrap.scrollLeft=0;canvasWrap.scrollTop=0;
+    const entities=lastModel.entities||[], rels=lastModel.relationships||[];
+    if(!entities.length)return;
+    const byName=new Map(entities.map(e=>[e.name,e])),adj=new Map(entities.map(e=>[e.name,new Set()]));
+    rels.forEach(r=>{if(r.childEntity!==r.parentEntity&&adj.has(r.childEntity)&&adj.has(r.parentEntity)){adj.get(r.childEntity).add(r.parentEntity);adj.get(r.parentEntity).add(r.childEntity);}});
+    const degree=n=>adj.get(n)?.size||0,unplaced=new Set(entities.map(e=>e.name)),components=[];
+    while(unplaced.size){const seed=[...unplaced].sort((x,y)=>degree(y)-degree(x)||x.localeCompare(y))[0],q=[seed],comp=[];unplaced.delete(seed);while(q.length){const n=q.shift();comp.push(n);[...(adj.get(n)||[])].sort((x,y)=>degree(y)-degree(x)||x.localeCompare(y)).forEach(x=>{if(unplaced.has(x)){unplaced.delete(x);q.push(x);}});}components.push(comp);}
+    components.sort((x,y)=>y.length-x.length);
+    const dense=entities.length>=16,veryDense=entities.length>=32,cardW=veryDense?150:dense?170:205,visibleRows=veryDense?4:dense?5:7;
+    const positions={},widths={},heights={};let componentTop=70;
+    components.forEach(comp=>{const root=[...comp].sort((x,y)=>degree(y)-degree(x)||x.localeCompare(y))[0],levels=[[root]],seen=new Set([root]);
+      for(let li=0;li<levels.length;li++){const next=[];levels[li].forEach(n=>[...(adj.get(n)||[])].sort((x,y)=>degree(y)-degree(x)||x.localeCompare(y)).forEach(x=>{if(comp.includes(x)&&!seen.has(x)){seen.add(x);next.push(x);}}));if(next.length)levels.push(next);}
+      comp.filter(n=>!seen.has(n)).forEach(n=>levels.push([n]));
+      const maxLevel=Math.max(...levels.map(x=>x.length)),colGap=veryDense?90:120,rowGap=veryDense?90:110,usableW=Math.max(canvasWrap.clientWidth-100,maxLevel*(cardW+colGap)+160);let levelTop=componentTop;
+      levels.forEach(level=>{const rowMaxH=Math.max(...level.map(n=>Math.max(108,52+Math.min(visibleRows,(byName.get(n)?.fields?.length||0)+1)*22))),span=level.length*cardW+(level.length-1)*colGap,startX=Math.max(55,(usableW-span)/2);
+        level.forEach((n,i)=>{const h=Math.max(108,52+Math.min(visibleRows,(byName.get(n)?.fields?.length||0)+1)*22),order=i%2===0?Math.floor(i/2):level.length-1-Math.floor(i/2),x=startX+order*(cardW+colGap);positions[n]={x:Math.round(x),y:Math.round(levelTop)};widths[n]=cardW;heights[n]=h;});levelTop+=rowMaxH+rowGap;});componentTop=levelTop+90;});
+    erPositions=positions;boxWidthOverrides=widths;boxHeightOverrides=heights;zoomLevel=1;render();
+    requestAnimationFrame(()=>{const geo=buildErGeometry(lastModel,erPositions,boxHeightOverrides,boxWidthOverrides),fit=Math.min((canvasWrap.clientWidth-30)/geo.svgWidth,(canvasWrap.clientHeight-30)/geo.svgHeight,1);setZoom(Math.max(.65,Math.round(fit*20)/20));canvasWrap.scrollLeft=0;canvasWrap.scrollTop=0;});
 }
 function renderCanvasSummary(){
     if(!lastModel||canvasSummary.hidden)return;
