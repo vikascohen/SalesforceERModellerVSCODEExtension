@@ -174,20 +174,22 @@ async function runSfJson(args: string[]): Promise<any> {
 }
 
 export async function describeAllObjectsBulk(): Promise<SfCliDescribe[]> {
-    // Bulk cache warm-up using one Tooling query. Keep the query deliberately
-    // flat: compound parent-field selections such as EntityDefinition.Label
-    // are not accepted consistently by sf data query --use-tooling-api.
-    const soql = "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, IsNillable, IsCalculated FROM FieldDefinition WHERE IsFieldDefinition = true";
-    const records = await runSoqlQueryViaCli(soql, true);
+    // Cache warm-up must use fields supported by Tooling FieldDefinition.
+    // IsCalculated/IsFieldDefinition are not portable query fields here.
+    const records = await runSoqlQueryViaCli(
+        "SELECT EntityDefinitionId, QualifiedApiName, Label, DataType, IsNillable FROM FieldDefinition",
+        true
+    );
     const byEntity = new Map<string, any[]>();
     for(const r of records){
         const id=String(r.EntityDefinitionId||'');
         if(!id||!r.QualifiedApiName) continue;
         const list=byEntity.get(id)||[]; list.push(r); byEntity.set(id,list);
     }
-    // EntityDefinition is fetched separately, still in one bulk query rather
-    // than one describe process per object.
-    const entities = await runSoqlQueryViaCli("SELECT Id, QualifiedApiName, Label, IsCustom FROM EntityDefinition", true);
+    const entities = await runSoqlQueryViaCli(
+        "SELECT Id, QualifiedApiName, Label, IsCustom FROM EntityDefinition",
+        true
+    );
     const objects:SfCliDescribe[]=[];
     for(const entity of entities){
         const name=entity.QualifiedApiName, rows=byEntity.get(String(entity.Id))||[];
@@ -195,7 +197,7 @@ export async function describeAllObjectsBulk(): Promise<SfCliDescribe[]> {
         objects.push({name,label:entity.Label||name,custom:!!entity.IsCustom,fields:rows.map((r:any)=>({
             name:r.QualifiedApiName,label:r.Label||r.QualifiedApiName,type:String(r.DataType||'').toLowerCase(),
             custom:String(r.QualifiedApiName).endsWith('__c'),nillable:!!r.IsNillable,createable:true,
-            calculated:!!r.IsCalculated,calculatedFormula:null,cascadeDelete:false,relationshipOrder:null,
+            calculated:false,calculatedFormula:null,cascadeDelete:false,relationshipOrder:null,
             referenceTo:[],relationshipName:null
         }))});
     }
