@@ -420,17 +420,16 @@ class ErModellerPanel {
         // relationship info) those already fetch — one round trip per
         // entity, each wrapped so one inaccessible/renamed object doesn't
         // fail the whole comparison.
-        const freshByEntityName: Record<string, any[]> = {};
-        for (const name of entityNames) {
+        const entries = await Promise.all(entityNames.map(async (name) => {
             try {
                 const raw = await describeObject(name);
-                const classified = classifyDescribe(raw);
-                freshByEntityName[name.toLowerCase()] = classified.fields;
+                return [name.toLowerCase(), classifyDescribe(raw).fields] as const;
             } catch (e) {
-                // Not a real/accessible org object — nothing to compare
-                // for this one, handled by the caller as "skip quietly".
+                return null;
             }
-        }
+        }));
+        const freshByEntityName: Record<string, any[]> = {};
+        entries.forEach((entry) => { if (entry) freshByEntityName[entry[0]] = entry[1]; });
         this.panel.webview.postMessage({ type: 'schemaDriftData', freshByEntityName });
     }
 
