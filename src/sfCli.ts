@@ -176,27 +176,27 @@ export async function describeObject(apiName: string): Promise<SfCliDescribe> {
     const cached=describeCache.get(key);
     if(cached) return cached;
     const request=(async()=> {
-    const result = await runSfJson(['sobject', 'describe', '--sobject', apiName, '--json']);
-    return {
-        name: result.name,
-        label: result.label,
-        custom: !!result.custom,
-        fields: (result.fields || []).map((f: any) => ({
-            name: f.name,
-            label: f.label,
-            type: f.type,
-            custom: !!f.custom,
-            nillable: !!f.nillable,
-            createable: !!f.createable,
-            calculated: !!f.calculated,
-            calculatedFormula: f.calculatedFormula || null,
-            cascadeDelete: !!f.cascadeDelete,
-            relationshipOrder: (f.relationshipOrder === undefined || f.relationshipOrder === null) ? null : f.relationshipOrder,
-            referenceTo: f.referenceTo || [],
-            relationshipName: f.relationshipName || null
-        }))
-    };
-
+        // Interactive drag/drop must not pay the sf CLI process-start cost.
+        // Reuse the authenticated in-memory REST session used by Sharing/Heatmap.
+        const session=await getRestSession();
+        const response=await fetch(session.instanceUrl+'/services/data/v61.0/sobjects/'+encodeURIComponent(apiName)+'/describe',{
+            headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}
+        });
+        if(response.status===401){restSessionCache=null;throw new SfCliError('Salesforce session expired. Retry the operation.');}
+        if(!response.ok){const body=await response.text();throw new SfCliError(`Could not describe ${apiName} (${response.status}): ${body.slice(0,300)}`);}
+        const result:any=await response.json();
+        return {
+            name: result.name,
+            label: result.label,
+            custom: !!result.custom,
+            fields: (result.fields || []).map((f:any)=>({
+                name:f.name,label:f.label,type:f.type,custom:!!f.custom,nillable:!!f.nillable,
+                createable:!!f.createable,calculated:!!f.calculated,calculatedFormula:f.calculatedFormula||null,
+                cascadeDelete:!!f.cascadeDelete,
+                relationshipOrder:(f.relationshipOrder===undefined||f.relationshipOrder===null)?null:f.relationshipOrder,
+                referenceTo:f.referenceTo||[],relationshipName:f.relationshipName||null
+            }))
+        };
     })();
     describeCache.set(key,request);
     try{return await request;}catch(e){describeCache.delete(key);throw e;}
