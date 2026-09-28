@@ -114,7 +114,7 @@ function injectDefs(defsEl) {
     });
 }
 
-async async function init() {
+async function init() {
     // window.__LOGIC_URI__ is set by an inline script in index.html --
     // a webview's asWebviewUri() result isn't known until the extension
     // host renders the HTML, so a static import path can't reference it;
