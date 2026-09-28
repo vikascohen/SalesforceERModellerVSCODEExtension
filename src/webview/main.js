@@ -72,6 +72,7 @@ let dirty = false;
 let focusedEntity = null;
 let erPositions={},boxHeightOverrides={},boxWidthOverrides={},zoomLevel=1,dragState=null,resizeState=null;
 let allObjectNames = [];
+const pendingPaletteDrops = new Set();
 
 // DSL editor intellisense state — separate from the import-panel's own
 // object-name autocomplete (suggestDropdown/allObjectNames above, which
@@ -919,6 +920,9 @@ function addEntityByDrop(name) {
         try { existingNames = parseEr(editor.value).entities.map((e) => e.name); } catch (e) { /* mid-typing / invalid DSL */ }
     }
     if (existingNames.some((n) => n.toLowerCase() === name.toLowerCase())) return; // already on canvas
+    if (pendingPaletteDrops.has(name.toLowerCase())) return;
+    pendingPaletteDrops.add(name.toLowerCase());
+    setStatus('Loading ' + name + '...');
     vscode.postMessage({ type: 'importFromOrg', names: [name] });
 }
 
@@ -1177,6 +1181,7 @@ function drawGeometry(geo) {
 function handleExtensionMessage(event) {
     const msg = event.data;
     if (msg.type === 'appendDsl') {
+        pendingPaletteDrops.clear();
         editor.value = editor.value.trim() ? editor.value.trimEnd() + '\n\n' + msg.dsl : msg.dsl;
         markDirty();
         render();
@@ -1187,6 +1192,7 @@ function handleExtensionMessage(event) {
         render();
         setStatus('Opened.');
     } else if (msg.type === 'importError') {
+        pendingPaletteDrops.clear();
         setStatus(msg.message, true);
     } else if (msg.type === 'saved') {
         dirty = false;
