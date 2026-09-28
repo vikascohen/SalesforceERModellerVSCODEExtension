@@ -8,6 +8,7 @@ const fieldDescriptionsCache = new Map<string, Promise<FieldDescriptionInfo[]>>(
 const sharingModelCache = new Map<string, Promise<SharingModelInfo | null>>();
 const recordCountCache = new Map<string, Promise<RecordCountInfo | null>>();
 const sharingSignalCache = new Map<string, Promise<SharingSignals>>();
+let restSessionCache: Promise<{ instanceUrl:string; accessToken:string }> | null = null;
 
 // Every function here shells out to the `sf` CLI and parses its --json
 // output. This mirrors how the Salesforce Org Visualizer extension
@@ -117,6 +118,27 @@ export async function setTargetOrg(usernameOrAlias: string): Promise<void> {
     sharingModelCache.clear();
     recordCountCache.clear();
     sharingSignalCache.clear();
+    restSessionCache = null;
+}
+
+async function getRestSession(): Promise<{ instanceUrl:string; accessToken:string }> {
+    if(restSessionCache) return restSessionCache;
+    restSessionCache=(async()=>{
+        const result=await runSfJson(['org','display','--verbose','--json']);
+        if(!result?.instanceUrl||!result?.accessToken) throw new SfCliError('Could not obtain an authenticated Salesforce REST session.');
+        return {instanceUrl:String(result.instanceUrl).replace(/\/$/,''),accessToken:String(result.accessToken)};
+    })();
+    try{return await restSessionCache;}catch(e){restSessionCache=null;throw e;}
+}
+
+async function restQuery(soql:string, tooling=false):Promise<any[]> {
+    const session=await getRestSession();
+    const base=tooling?'/services/data/v61.0/tooling/query':'/services/data/v61.0/query';
+    const response=await fetch(session.instanceUrl+base+'?q='+encodeURIComponent(soql),{headers:{Authorization:'Bearer '+session.accessToken,Accept:'application/json'}});
+    if(response.status===401){restSessionCache=null;throw new SfCliError('Salesforce session expired. Retry the operation.');}
+    if(!response.ok){const body=await response.text();throw new SfCliError(`Salesforce REST query failed (${response.status}): ${body.slice(0,300)}`);}
+    const body:any=await response.json();
+    return Array.isArray(body.records)?body.records:[];
 }
 
 async function runSfJson(args: string[]): Promise<any> {
@@ -280,7 +302,7 @@ export interface SharingModelInfo {
  */
 export async function getSharingModels(objectApiNames: string[]): Promise<Record<string, SharingModelInfo>> {
     const result: Record<string, SharingModelInfo> = {};
-    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!name)return;const key=name.toLowerCase();let request=sharingModelCache.get(key);if(!request){request=(async()=>{try{const rows=await runSoqlQuery(`SELECT InternalSharingModel, ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName = '${name}'`,true);const row=rows[0];return row?{internalModel:row.InternalSharingModel||null,externalModel:row.ExternalSharingModel||null}:null;}catch{return null;}})();sharingModelCache.set(key,request);}const value=await request;if(value)result[name]=value;}));
+    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!name)return;const key=name.toLowerCase();let request=sharingModelCache.get(key);if(!request){request=(async()=>{try{const rows=await restQuery(`SELECT InternalSharingModel, ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName = '${name}'`,true);const row=rows[0];return row?{internalModel:row.InternalSharingModel||null,externalModel:row.ExternalSharingModel||null}:null;}catch{return null;}})();sharingModelCache.set(key,request);}const value=await request;if(value)result[name]=value;}));
     return result;
 }
 
@@ -300,7 +322,7 @@ export interface RecordCountInfo {
  */
 export async function getRecordCounts(objectApiNames: string[]): Promise<Record<string, RecordCountInfo>> {
     const result: Record<string, RecordCountInfo> = {};
-    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name))return;const key=name.toLowerCase();let request=recordCountCache.get(key);if(!request){request=(async()=>{try{const rows=await runSoqlQuery(`SELECT COUNT(Id) cnt, MAX(LastModifiedDate) lastMod FROM ${name}`,false),row=rows[0];return row?{count:typeof row.cnt==='number'?row.cnt:0,lastModifiedDate:row.lastMod||null}:null;}catch{return null;}})();recordCountCache.set(key,request);}const value=await request;if(value)result[name]=value;}));
+    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name))return;const key=name.toLowerCase();let request=recordCountCache.get(key);if(!request){request=(async()=>{try{const rows=await restQuery(`SELECT COUNT(Id) cnt, MAX(LastModifiedDate) lastMod FROM ${name}`),row=rows[0];return row?{count:typeof row.cnt==='number'?row.cnt:0,lastModifiedDate:row.lastMod||null}:null;}catch{return null;}})();recordCountCache.set(key,request);}const value=await request;if(value)result[name]=value;}));
     return result;
 }
 
@@ -336,7 +358,7 @@ export interface SharingSignals {
  */
 export async function getSharingSignals(objectApiNames: string[]): Promise<Record<string, SharingSignals>> {
     const result: Record<string, SharingSignals> = {};
-    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name))return;const key=name.toLowerCase();let request=sharingSignalCache.get(key);if(!request){request=(async()=>{const signals:SharingSignals={shareTableAvailable:false,isCustomObject:name.endsWith('__c'),hasSharingRule:false,hasApexSharing:false};try{const rows=await runSoqlQuery(`SELECT RowCause FROM ${name}Share GROUP BY RowCause`,false);signals.shareTableAvailable=true;rows.forEach((row:any)=>{const cause=row.RowCause;if(cause==='Rule')signals.hasSharingRule=true;else if(!KNOWN_STANDARD_ROW_CAUSES.has(cause))signals.hasApexSharing=true;});}catch{}return signals;})();sharingSignalCache.set(key,request);}result[name]=await request;}));
+    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name))return;const key=name.toLowerCase();let request=sharingSignalCache.get(key);if(!request){request=(async()=>{const signals:SharingSignals={shareTableAvailable:false,isCustomObject:name.endsWith('__c'),hasSharingRule:false,hasApexSharing:false};try{const rows=await restQuery(`SELECT RowCause FROM ${name}Share GROUP BY RowCause`);signals.shareTableAvailable=true;rows.forEach((row:any)=>{const cause=row.RowCause;if(cause==='Rule')signals.hasSharingRule=true;else if(!KNOWN_STANDARD_ROW_CAUSES.has(cause))signals.hasApexSharing=true;});}catch{}return signals;})();sharingSignalCache.set(key,request);}result[name]=await request;}));
     return result;
 }
 
