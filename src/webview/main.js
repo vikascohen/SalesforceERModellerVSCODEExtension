@@ -9,6 +9,7 @@ import { buildFieldMarkerSuffix } from './fieldMarkers.js';
 import { scanForMissingRelationships } from './relationshipLinter.js';
 import { computeSchemaDrift } from './schemaDrift.js';
 import { analyseArchitecture, analyseObject, findArchitecturePath, analyseBlastRadius, detectJunctionObjects, analyseDomains } from './architectureIntelligence.js';
+import { parseEr, buildErGeometry, buildMermaidErDiagram, buildDrawioXml, splitFieldList } from '../erDiagramLogic.js';
 
 const bootDiagnostic = document.getElementById('bootDiagnostic');
 if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime: bundle executing';
@@ -58,7 +59,6 @@ const zoomOutBtn=document.getElementById('zoomOutBtn'),zoomResetBtn=document.get
 const mimicBtn=document.getElementById('mimicBtn'),mimicModal=document.getElementById('mimicModal'),mimicCloseBtn=document.getElementById('mimicCloseBtn'),mimicAddObjectBtn=document.getElementById('mimicAddObjectBtn'),mimicGenerateBtn=document.getElementById('mimicGenerateBtn'),mimicModelName=document.getElementById('mimicModelName'),mimicBody=document.getElementById('mimicBody'),mimicError=document.getElementById('mimicError'),exportPngBtn=document.getElementById('exportPngBtn'),dictionaryCsvBtn=document.getElementById('dictionaryCsvBtn'),dictionaryIntelligenceBtn=document.getElementById('dictionaryIntelligenceBtn'),dictionaryIntelligence=document.getElementById('dictionaryIntelligence');
 const architectureBtn=document.getElementById('architectureBtn'),architecturePanel=document.getElementById('architecturePanel'),architectureBody=document.getElementById('architectureBody'),architectureCloseBtn=document.getElementById('architectureCloseBtn'),architectureRefreshBtn=document.getElementById('architectureRefreshBtn'),architectureExportBtn=document.getElementById('architectureExportBtn');
 
-let parseEr, buildErGeometry, buildMermaidErDiagram, buildDrawioXml, splitFieldList;
 let renderTimer = null;
 let lastModel = null;
 let dirty = false;
@@ -122,14 +122,6 @@ async function init() {
     // a webview's asWebviewUri() result isn't known until the extension
     // host renders the HTML, so a static import path can't reference it;
     // this loads it as a dynamic import instead.
-    if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime: loading diagram engine';
-    const logic = await import(window.__LOGIC_URI__);
-    if (bootDiagnostic) bootDiagnostic.textContent = 'ER runtime: diagram engine loaded';
-    parseEr = logic.parseEr;
-    buildErGeometry = logic.buildErGeometry;
-    buildMermaidErDiagram = logic.buildMermaidErDiagram;
-    buildDrawioXml = logic.buildDrawioXml;
-    splitFieldList = logic.splitFieldList;
 
     editor.addEventListener('input', () => { markDirty(); scheduleRender(); updateDslSuggestions(); });
     editor.addEventListener('click', () => updateDslSuggestions());
