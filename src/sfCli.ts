@@ -124,9 +124,15 @@ export async function setTargetOrg(usernameOrAlias: string): Promise<void> {
 async function getRestSession(): Promise<{ instanceUrl:string; accessToken:string }> {
     if(restSessionCache) return restSessionCache;
     restSessionCache=(async()=>{
-        const result=await runSfJson(['org','display','--verbose','--json']);
-        if(!result?.instanceUrl||!result?.accessToken) throw new SfCliError('Could not obtain an authenticated Salesforce REST session.');
-        return {instanceUrl:String(result.instanceUrl).replace(/\/$/,''),accessToken:String(result.accessToken)};
+        // Obtain a Salesforce frontdoor session from the already authenticated CLI.
+        // This avoids treating the verbose org-display auth value as an OAuth Bearer token.
+        const result=await runSfJson(['org','open','--url-only','--json']);
+        const urlText=String(result?.url||result?.result?.url||'');
+        if(!urlText) throw new SfCliError('Could not obtain an authenticated Salesforce session.');
+        const url=new URL(urlText);
+        const sid=url.searchParams.get('sid');
+        if(!sid) throw new SfCliError('Salesforce CLI did not return a usable session.');
+        return {instanceUrl:url.origin,accessToken:sid};
     })();
     try{return await restSessionCache;}catch(e){restSessionCache=null;throw e;}
 }
