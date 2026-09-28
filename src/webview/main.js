@@ -19,6 +19,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const editor = document.getElementById('dslEditor');
 const dslEditorWrap = document.querySelector('.dsl-editor-wrap');
 const dslExpandBtn = document.getElementById('dslExpandBtn');
+const dslCollapseBtn = document.getElementById('dslCollapseBtn');
+const dslOpenBtn = document.getElementById('dslOpenBtn');
 const canvas = document.getElementById('canvas');
 const canvasWrap = canvas.parentElement;
 const fitModelBtn = document.getElementById('fitModelBtn');
@@ -174,6 +176,8 @@ async function init() {
     driftCloseBtn.addEventListener('click', closeDriftModal);
     paletteToggleBtn.addEventListener('click', togglePalette);
     dslExpandBtn.addEventListener('click', () => { const expanded = dslEditorWrap.classList.toggle('expanded'); dslExpandBtn.textContent = expanded ? 'Restore' : 'Expand'; dslExpandBtn.title = expanded ? 'Restore split view' : 'Expand DSL editor'; });
+    dslCollapseBtn.addEventListener('click', () => { dslEditorWrap.classList.remove('expanded'); dslEditorWrap.classList.add('collapsed'); dslOpenBtn.hidden=false; dslExpandBtn.textContent='Expand'; });
+    dslOpenBtn.addEventListener('click', () => { dslEditorWrap.classList.remove('collapsed'); dslOpenBtn.hidden=true; editor.focus(); });
     paletteSearch.addEventListener('input', renderPaletteList);
     canvas.parentElement.addEventListener('dragover', handleCanvasDragOver);
     canvas.parentElement.addEventListener('dragleave', handleCanvasDragLeave);
