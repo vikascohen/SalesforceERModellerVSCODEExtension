@@ -270,13 +270,10 @@ class ErModellerPanel {
         try{
             this.panel.webview.postMessage({type:'objectDefinitionsProgress',completed:0,total:1});
             const objects=await describeAllObjectsBulk();
-            let completed=0;
-            for(const raw of objects){
-                const dsl=buildErSource([classifyDescribe(raw)]);
-                this.paletteDslCache.set(raw.name.toLowerCase(),Promise.resolve(dsl));
-                completed++;
-            }
-            this.panel.webview.postMessage({type:'objectDefinitionsLoaded',completed,total:objects.length,failed:0});
+            // This button now warms the object catalogue only. Salesforce does
+            // not permit one unfiltered FieldDefinition query across the org.
+            // Do not poison the exact DSL cache with incomplete field metadata.
+            this.panel.webview.postMessage({type:'objectDefinitionsLoaded',completed:objects.length,total:objects.length,failed:0,catalogueOnly:true});
         }catch(e){
             this.panel.webview.postMessage({type:'objectDefinitionsError',message:e instanceof Error?e.message:String(e)});
         }
