@@ -35,7 +35,16 @@ async function run() {
         console.log('esbuild watching...');
     } else {
         await esbuild.build(buildOptions);
-        console.log('esbuild build complete.');
+        await esbuild.build({
+            entryPoints: ['src/webview/main.js'],
+            bundle: true,
+            outfile: 'src/webview/main.bundle.js',
+            format: 'iife',
+            platform: 'browser',
+            target: 'es2020',
+            sourcemap: true
+        });
+        console.log('esbuild build complete (extension + webview).');
     }
 }
 
