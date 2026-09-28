@@ -575,3 +575,5 @@ body { overflow: hidden; }
 
 .legend-drag-head{display:flex;align-items:center;gap:12px;cursor:move;user-select:none;margin-bottom:2px}.legend-drag-head strong{flex:1}.legend-reset{font-size:9px!important;padding:1px 4px!important}.relationship-legend{touch-action:none}
 .canvas-wrap.maximised{top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;margin:0!important}
+
+.return-diagram-btn{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-weight:600;padding:5px 10px;background:transparent;color:var(--vscode-textLink-foreground);border:1px solid var(--vscode-panel-border);border-radius:3px;cursor:pointer}.return-diagram-btn:hover{background:var(--vscode-toolbar-hoverBackground);color:var(--vscode-textLink-activeForeground,var(--vscode-textLink-foreground));border-color:var(--vscode-focusBorder)}
