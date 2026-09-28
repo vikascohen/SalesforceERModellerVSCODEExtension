@@ -5,6 +5,9 @@ const execAsync = promisify(exec);
 const describeCache = new Map<string, Promise<SfCliDescribe>>();
 let objectNamesCache: Promise<string[]> | null = null;
 const fieldDescriptionsCache = new Map<string, Promise<FieldDescriptionInfo[]>>();
+const sharingModelCache = new Map<string, Promise<SharingModelInfo | null>>();
+const recordCountCache = new Map<string, Promise<RecordCountInfo | null>>();
+const sharingSignalCache = new Map<string, Promise<SharingSignals>>();
 
 // Every function here shells out to the `sf` CLI and parses its --json
 // output. This mirrors how the Salesforce Org Visualizer extension
@@ -111,6 +114,9 @@ export async function setTargetOrg(usernameOrAlias: string): Promise<void> {
     describeCache.clear();
     objectNamesCache = null;
     fieldDescriptionsCache.clear();
+    sharingModelCache.clear();
+    recordCountCache.clear();
+    sharingSignalCache.clear();
 }
 
 async function runSfJson(args: string[]): Promise<any> {
@@ -287,25 +293,10 @@ export interface SharingModelInfo {
  */
 export async function getSharingModels(objectApiNames: string[]): Promise<Record<string, SharingModelInfo>> {
     const result: Record<string, SharingModelInfo> = {};
-    for (const rawName of objectApiNames) {
-        const name = (rawName || '').trim();
-        if (!name) continue;
-        try {
-            const soql = `SELECT InternalSharingModel, ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName = '${name}'`;
-            const rows = await runSoqlQuery(soql, true);
-            const row = rows[0];
-            if (row && (row.InternalSharingModel != null || row.ExternalSharingModel != null)) {
-                result[name] = {
-                    internalModel: row.InternalSharingModel || null,
-                    externalModel: row.ExternalSharingModel || null
-                };
-            }
-        } catch (e) {
-            // Skip this one object's badge, don't fail the batch.
-        }
-    }
+    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!name)return;const key=name.toLowerCase();let request=sharingModelCache.get(key);if(!request){request=(async()=>{try{const rows=await runSoqlQuery(`SELECT InternalSharingModel, ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName = '${name}'`,true);const row=rows[0];return row?{internalModel:row.InternalSharingModel||null,externalModel:row.ExternalSharingModel||null}:null;}catch{return null;}})();sharingModelCache.set(key,request);}const value=await request;if(value)result[name]=value;}));
     return result;
 }
+
 
 export interface RecordCountInfo {
     count: number;
@@ -322,25 +313,10 @@ export interface RecordCountInfo {
  */
 export async function getRecordCounts(objectApiNames: string[]): Promise<Record<string, RecordCountInfo>> {
     const result: Record<string, RecordCountInfo> = {};
-    for (const rawName of objectApiNames) {
-        const name = (rawName || '').trim();
-        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) continue;
-        try {
-            const soql = `SELECT COUNT(Id) cnt, MAX(LastModifiedDate) lastMod FROM ${name}`;
-            const rows = await runSoqlQuery(soql, false);
-            const row = rows[0];
-            if (row) {
-                result[name] = {
-                    count: typeof row.cnt === 'number' ? row.cnt : 0,
-                    lastModifiedDate: row.lastMod || null
-                };
-            }
-        } catch (e) {
-            // Skip this one object's count, don't fail the batch.
-        }
-    }
+    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name))return;const key=name.toLowerCase();let request=recordCountCache.get(key);if(!request){request=(async()=>{try{const rows=await runSoqlQuery(`SELECT COUNT(Id) cnt, MAX(LastModifiedDate) lastMod FROM ${name}`,false),row=rows[0];return row?{count:typeof row.cnt==='number'?row.cnt:0,lastModifiedDate:row.lastMod||null}:null;}catch{return null;}})();recordCountCache.set(key,request);}const value=await request;if(value)result[name]=value;}));
     return result;
 }
+
 
 const KNOWN_STANDARD_ROW_CAUSES = new Set([
     'Owner', 'Manual', 'Rule', 'Team', 'Territory', 'Territory2',
@@ -373,36 +349,10 @@ export interface SharingSignals {
  */
 export async function getSharingSignals(objectApiNames: string[]): Promise<Record<string, SharingSignals>> {
     const result: Record<string, SharingSignals> = {};
-    for (const rawName of objectApiNames) {
-        const name = (rawName || '').trim();
-        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) continue;
-
-        const signals: SharingSignals = {
-            shareTableAvailable: false,
-            isCustomObject: name.endsWith('__c'),
-            hasSharingRule: false,
-            hasApexSharing: false
-        };
-        try {
-            const rows = await runSoqlQuery(`SELECT RowCause FROM ${name}Share GROUP BY RowCause`, false);
-            signals.shareTableAvailable = true;
-            rows.forEach((row: any) => {
-                const rowCause = row.RowCause;
-                if (rowCause === 'Rule') {
-                    signals.hasSharingRule = true;
-                } else if (!KNOWN_STANDARD_ROW_CAUSES.has(rowCause)) {
-                    signals.hasApexSharing = true;
-                }
-            });
-        } catch (e) {
-            // No __Share table for this object at all, or genuinely
-            // inaccessible — "no sharing data available" either way.
-            signals.shareTableAvailable = false;
-        }
-        result[name] = signals;
-    }
+    await Promise.all(objectApiNames.map(async rawName=>{const name=(rawName||'').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name))return;const key=name.toLowerCase();let request=sharingSignalCache.get(key);if(!request){request=(async()=>{const signals:SharingSignals={shareTableAvailable:false,isCustomObject:name.endsWith('__c'),hasSharingRule:false,hasApexSharing:false};try{const rows=await runSoqlQuery(`SELECT RowCause FROM ${name}Share GROUP BY RowCause`,false);signals.shareTableAvailable=true;rows.forEach((row:any)=>{const cause=row.RowCause;if(cause==='Rule')signals.hasSharingRule=true;else if(!KNOWN_STANDARD_ROW_CAUSES.has(cause))signals.hasApexSharing=true;});}catch{}return signals;})();sharingSignalCache.set(key,request);}result[name]=await request;}));
     return result;
 }
+
 
 export async function runSoqlQuery(soql: string, useToolingApi: boolean): Promise<any[]> {
     const args = ['data', 'query', '--query', soql, '--json'];
