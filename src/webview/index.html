@@ -81,7 +81,7 @@
                 <button id="dictionaryExportBtn" hidden>Export to Excel</button>
                 <button id="dictionaryCsvBtn" hidden>Export CSV</button>
                 <button id="dictionaryIntelligenceBtn" hidden>Field Intelligence</button>
-                <button id="dictionaryCloseBtn" title="Close Data Dictionary">✕</button>
+                <button id="dictionaryCloseBtn" class="return-diagram-btn" title="Return to ER diagram">← Return to Diagram</button>
             </div>
             <div id="dictionaryIntelligence" class="dictionary-intelligence" hidden></div>
             <div id="dictionaryTableWrap" class="dictionary-table-wrap"></div>
@@ -95,7 +95,7 @@
     </div>
 
     <div id="architecturePanel" class="architecture-panel" hidden>
-        <div class="architecture-header"><div><strong>Architecture Intelligence</strong><div class="architecture-sub">Evidence from the current ER model. No security scoring or invented runtime dependencies.</div></div><button id="architectureExportBtn">Export Report PNG</button><button id="architectureRefreshBtn">Refresh</button><button id="architectureCloseBtn">✕</button></div>
+        <div class="architecture-header"><div><strong>Architecture Intelligence</strong><div class="architecture-sub">Evidence from the current ER model. No security scoring or invented runtime dependencies.</div></div><button id="architectureExportBtn">Export Report PNG</button><button id="architectureRefreshBtn">Refresh</button><button id="architectureCloseBtn" class="return-diagram-btn" title="Return to ER diagram">← Return to Diagram</button></div>
         <div class="architecture-tabs"><button data-arch-tab="overview" class="active">Overview</button><button data-arch-tab="object">Object Map & Impact</button><button data-arch-tab="path">Path Finder</button><button data-arch-tab="usage">Change Readiness</button><button data-arch-tab="relationships">Relationship Insights</button><button data-arch-tab="junctions">Junction Intelligence</button><button data-arch-tab="domains">Domains</button></div>
         <div id="architectureBody" class="architecture-body"></div>
     </div>
